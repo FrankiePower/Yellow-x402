@@ -13,6 +13,7 @@
     "@coinbase/agentkit": "latest",
     "@coinbase/agentkit-langchain": "latest",
     "@coinbase/agentkit-vercel-ai-sdk": "latest",
+    "@erc7824/nitrolite": "^0.5.3",
     "@langchain/core": "^0.3.19",
     "@langchain/langgraph": "^0.2.21",
     "@langchain/openai": "^0.3.14",
@@ -25,7 +26,8 @@
     "react-dom": "^19.2.3",
     "react-markdown": "^10.0.0",
     "viem": "^2.24.1",
-    "wagmi": "^2.11.0"
+    "wagmi": "^2.11.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

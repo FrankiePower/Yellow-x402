@@ -14,6 +14,9 @@ import fs from "fs";
 import { createWalletClient, Hex, http } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
+// Yellow Network integration
+import { yellowActionProvider } from "@/lib/yellow";
+
 /**
  * AgentKit Integration Route
  *
@@ -93,6 +96,7 @@ export async function prepareAgentkitAndWalletProvider(): Promise<{
       pythActionProvider(),
       walletActionProvider(),
       erc20ActionProvider(),
+      yellowActionProvider(), // Yellow Network micropayments
     ];
     const canUseCdpApi = process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET;
     if (canUseCdpApi) {
