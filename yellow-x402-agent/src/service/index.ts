@@ -1,18 +1,25 @@
 /**
- * service/index.ts  —  x402 paid resource endpoint backed by Yellow
+ * service/index.ts  —  x402 paid endpoints backed by Yellow
  *
  * Flow:
  *   1. Connects to ClearNode, authenticates, listens for incoming
  *      transfer notifications (push method "tr").
- *   2. GET /resource  — no X-PAYMENT → 402 with Yellow scheme requirements.
- *   3. GET /resource  — with X-PAYMENT → extract transactionId,
- *      confirm it arrived via notification cache, return the resource.
+ *   2. Any paid route — no X-PAYMENT → 402 with Yellow scheme requirements.
+ *   3. Any paid route — with X-PAYMENT → extract transactionId,
+ *      confirm it arrived via notification cache, serve the resource.
+ *
+ * Adding a new paid route:
+ *   app.get('/whatever', async (req, res) => {
+ *     const tx = await requirePayment(req, res, { price: '500', description: '…' });
+ *     if (!tx) return;   // 402 / 400 already sent
+ *     res.json({ … });
+ *   });
  *
  * Run:  npm run service
  */
 
 import 'dotenv/config';
-import express                          from 'express';
+import express, { Request, Response }  from 'express';
 import { YellowClient, TransferTx }    from '../lib/yellow-client.js';
 
 // ── config ─────────────────────────────────────────────────
@@ -43,27 +50,34 @@ function cacheIncoming(txs: TransferTx[]) {
   }
 }
 
-// ── Express app ────────────────────────────────────────────
-const app = express();
-app.use(express.json());
+// ── requirePayment ─────────────────────────────────────────
+// Call at the top of any paid route handler.
+// Returns the confirmed TransferTx on success.
+// Returns null if a 402/400 response was already sent — caller just returns.
+interface PaymentOptions {
+  price?       : string;   // override default PRICE for this route
+  description? : string;   // shown in the 402 body
+}
 
-// Health
-app.get('/health', (_req, res) => res.json({ ok: true }));
-
-// ── paid resource ──────────────────────────────────────────
-app.get('/resource', async (req, res) => {
-  const raw = req.headers['x-payment'] as string | undefined;
+async function requirePayment(
+  req: Request,
+  res: Response,
+  opts: PaymentOptions = {},
+): Promise<TransferTx | null> {
+  const price       = opts.price       ?? PRICE;
+  const description = opts.description ?? 'Paid resource';
+  const raw         = req.headers['x-payment'] as string | undefined;
 
   // ── no header → 402 ──────────────────────────────────
   if (!raw) {
-    return res.status(402).json({
+    res.status(402).json({
       accepts: [{
         scheme            : 'yellow',
         network           : 'eip155:11155111',
-        maxAmountRequired : PRICE,
-        resource          : '/resource',
-        description       : 'Access to the premium resource',
-        payTo             : yellow.address,      // service wallet
+        maxAmountRequired : price,
+        resource          : req.path,           // auto from route
+        description,
+        payTo             : yellow.address,
         asset             : ASSET,
         extra: {
           clearnetUrl: process.env.CLEARNET_URL || 'wss://clearnet-sandbox.yellow.com/ws',
@@ -71,18 +85,21 @@ app.get('/resource', async (req, res) => {
         },
       }],
     });
+    return null;
   }
 
   // ── decode X-PAYMENT ────────────────────────────────────
-  let payment: { scheme: string; payload: { transactionId: number; amount: string; asset: string } };
+  let payment: { scheme: string; payload: { transactionId: number } };
   try {
     payment = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
   } catch {
-    return res.status(400).json({ error: 'Malformed X-PAYMENT header' });
+    res.status(400).json({ error: 'Malformed X-PAYMENT header' });
+    return null;
   }
 
   if (payment.scheme !== 'yellow') {
-    return res.status(400).json({ error: `Unsupported scheme: ${payment.scheme}` });
+    res.status(400).json({ error: `Unsupported scheme: ${payment.scheme}` });
+    return null;
   }
 
   const { transactionId } = payment.payload;
@@ -101,26 +118,46 @@ app.get('/resource', async (req, res) => {
 
   if (!tx) {
     console.warn(`[service] tx ${transactionId} not in cache after 3 s`);
-    return res.status(402).json({ error: 'Payment not confirmed — transaction not received' });
+    res.status(402).json({ error: 'Payment not confirmed — transaction not received' });
+    return null;
   }
 
   // Sanity: asset + amount + destination
   if (tx.asset !== ASSET) {
-    return res.status(402).json({ error: `Wrong asset: expected ${ASSET}, got ${tx.asset}` });
+    res.status(402).json({ error: `Wrong asset: expected ${ASSET}, got ${tx.asset}` });
+    return null;
   }
-  if (BigInt(tx.amount) < BigInt(PRICE)) {
-    return res.status(402).json({ error: `Insufficient amount: need ${PRICE}, got ${tx.amount}` });
+  if (BigInt(tx.amount) < BigInt(price)) {
+    res.status(402).json({ error: `Insufficient amount: need ${price}, got ${tx.amount}` });
+    return null;
   }
   if (tx.to_account.toLowerCase() !== yellow.address.toLowerCase()) {
-    return res.status(402).json({ error: 'Payment destination mismatch' });
+    res.status(402).json({ error: 'Payment destination mismatch' });
+    return null;
   }
 
-  // ── serve ───────────────────────────────────────────────
-  console.log(`[service] payment confirmed  tx=${transactionId}  → serving resource`);
-  return res.json({
+  console.log(`[service] payment confirmed  tx=${transactionId}  → ${req.path}`);
+  return tx;
+}
+
+// ── Express app ────────────────────────────────────────────
+const app = express();
+app.use(express.json());
+
+// Health (free)
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// ── paid routes ─────────────────────────────────────────────
+app.get('/resource', async (req, res) => {
+  const tx = await requirePayment(req, res, {
+    description: 'Access to the premium resource',
+  });
+  if (!tx) return;   // 402 or 400 already sent
+
+  res.json({
     message       : 'Payment confirmed. Here is your premium resource.',
     data          : { quote: 'The only winning move is not to play.' },
-    transactionId,
+    transactionId : tx.id,
     paidAmount    : tx.amount,
     asset         : tx.asset,
     timestamp     : new Date().toISOString(),
