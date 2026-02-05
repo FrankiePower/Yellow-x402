@@ -55,14 +55,14 @@ graph TB
         Box_Setup -.->|"Channel indexed"| Yellow_Node
 
         %% High Frequency Loop
-        Agents ==>"2. GET /price"==> Yellow_API
-        Yellow_API ==>"3. 402 Pay 0.0001 yUSD"==> Agents
+        Agents ==>|"2. GET /price"| Yellow_API
+        Yellow_API ==>|"3. 402 Pay 0.0001 yUSD"| Agents
         
-        Agents ==>"4. Sign & Send (Off-chain)"==> Yellow_Node
-        Yellow_Node ==>"5. Instant Settlement (NO GAS)"==> Yellow_Node
-        Yellow_Node -.->"6. 'tr' Notification"-.-> Yellow_API
+        Agents ==>|"4. Sign & Send (Off-chain)"| Yellow_Node
+        Yellow_Node ==>|"5. Instant Settlement (NO GAS)"| Yellow_Node
+        Yellow_Node -.->|"6. 'tr' Notification"| Yellow_API
         
-        Yellow_API ==>"7. Data Released (ms)"==> Agents
+        Yellow_API ==>|"7. Data Released (ms)"| Agents
         
         %% Loop
         linkStyle 9,10,11,12,13,14 stroke-width:4px,fill:none,stroke:#FCD535;
