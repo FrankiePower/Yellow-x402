@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useSignTypedData } from "wagmi";
 import { Omnix402Service } from "@/services/omnix402.service";
+import { useYellow } from "@/hooks/useYellow";
 
 export interface UseOmnix402Return {
   loading: boolean;
@@ -19,8 +19,8 @@ export function useOmnix402(): UseOmnix402Return {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("// Waiting...");
 
-  const { address, chainId, isConnected } = useAccount();
-  const { signTypedDataAsync } = useSignTypedData();
+  const { address, chain, isConnected, walletClient } = useYellow();
+  const chainId = chain.id;
 
   const reset = () => {
     setResponse(null);
@@ -30,7 +30,7 @@ export function useOmnix402(): UseOmnix402Return {
   };
 
   const callEndpoint = async (endpointUrl: string, requestBody: any) => {
-    if (!isConnected) {
+    if (!isConnected || !walletClient) {
       throw new Error("Please connect your wallet first");
     }
 
@@ -79,9 +79,9 @@ export function useOmnix402(): UseOmnix402Return {
         version: "1",
         chainId: chainId,
         verifyingContract: accept.asset as `0x${string}`,
-      };
+      } as const;
 
-      const types = {
+       const types = {
         TransferWithAuthorizationData: [
           { name: "from", type: "address" },
           { name: "to", type: "address" },
@@ -90,7 +90,7 @@ export function useOmnix402(): UseOmnix402Return {
           { name: "validBefore", type: "uint256" },
           { name: "nonce", type: "bytes32" },
         ],
-      };
+      } as const;
 
       const message = {
         from: address as `0x${string}`,
@@ -99,9 +99,10 @@ export function useOmnix402(): UseOmnix402Return {
         validAfter: BigInt(validAfter),
         validBefore: BigInt(validBefore),
         nonce: nonce as `0x${string}`,
-      };
+      } as const;
 
-      const signature = await signTypedDataAsync({
+      const signature = await walletClient.signTypedData({
+        account: address as `0x${string}`,
         domain,
         types,
         primaryType: "TransferWithAuthorizationData",
