@@ -1,92 +1,96 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useState, useEffect, useCallback } from "react";
 import { parseUnits, formatUnits, Address } from "viem";
 import { USDO_ADDRESS, USDO_ABI, ERC20_ABI } from "../../config/contracts";
 import { ConnectButton } from "./ConnectButton";
-import { useAppKit } from "@reown/appkit/react";
+import { useYellow } from "@/hooks/useYellow";
 
 export default function SwapUSDO() {
-  const { address, chainId, isConnected } = useAccount();
-  const { open } = useAppKit();
+  const { address, chain, isConnected, publicClient, walletClient } = useYellow();
+  const chainId = chain.id;
+
   const [amount, setAmount] = useState("");
   const [isWrapping, setIsWrapping] = useState(true); // true = wrap (USDC->USDO), false = unwrap (USDO->USDC)
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined);
+  
+  // Data states
+  const [usdcAddress, setUsdcAddress] = useState<Address | undefined>(undefined);
+  const [usdoBalance, setUsdoBalance] = useState<bigint>(0n);
+  const [usdcBalance, setUsdcBalance] = useState<bigint>(0n);
+  const [usdcDecimals, setUsdcDecimals] = useState<number>(6);
+  const [allowance, setAllowance] = useState<bigint>(0n);
 
-  const usdoAddress = chainId ? USDO_ADDRESS[chainId] : undefined;
+  const [isPending, setIsPending] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  // Read USDC Address from USDO contract
-  const { data: usdcAddress } = useReadContract({
-    address: usdoAddress,
-    abi: USDO_ABI,
-    functionName: "USDC",
-    query: {
-      enabled: !!usdoAddress,
-    },
-  });
+  const usdoAddress = chainId ? USDO_ADDRESS[chainId as keyof typeof USDO_ADDRESS] : undefined;
 
-  // Read Balances
-  const { data: usdoBalance, refetch: refetchUsdo } = useReadContract({
-    address: usdoAddress,
-    abi: USDO_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address && !!usdoAddress,
-    },
-  });
+  const fetchData = useCallback(async () => {
+    if (!publicClient || !usdoAddress) return;
 
-  const { data: usdcBalance, refetch: refetchUsdc } = useReadContract({
-    address: usdcAddress as Address,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address && !!usdcAddress,
-    },
-  });
+    try {
+      // 1. Get USDC Address from USDO contract
+      if (!usdcAddress) {
+          const _usdcAddress = await publicClient.readContract({
+            address: usdoAddress,
+            abi: USDO_ABI,
+            functionName: "USDC",
+          }) as Address;
+          setUsdcAddress(_usdcAddress);
+      }
 
-  const { data: usdcDecimals } = useReadContract({
-    address: usdcAddress as Address,
-    abi: ERC20_ABI,
-    functionName: "decimals",
-    query: {
-      enabled: !!usdcAddress,
-    },
-  });
+      // If we have address (user connected)
+      if (address) {
+        // 2. Get USDO Balance
+        const _usdoBalance = await publicClient.readContract({
+            address: usdoAddress,
+            abi: USDO_ABI,
+            functionName: "balanceOf",
+            args: [address as Address],
+        }) as bigint;
+        setUsdoBalance(_usdoBalance);
 
-  // Allowance check
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
-    address: usdcAddress as Address,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address && usdoAddress ? [address, usdoAddress] : undefined,
-    query: {
-      enabled: !!address && !!usdoAddress && !!usdcAddress,
-    },
-  });
+        if (usdcAddress) {
+             // 3. Get USDC Balance
+            const _usdcBalance = await publicClient.readContract({
+                address: usdcAddress,
+                abi: ERC20_ABI,
+                functionName: "balanceOf",
+                args: [address as Address],
+            }) as bigint;
+            setUsdcBalance(_usdcBalance);
 
-  const { writeContractAsync, isPending } = useWriteContract();
+            // 4. Get Decimals
+            const _decimals = await publicClient.readContract({
+                address: usdcAddress,
+                abi: ERC20_ABI,
+                functionName: "decimals",
+            }) as number;
+            setUsdcDecimals(_decimals);
 
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
-
-  useEffect(() => {
-    if (isSuccess) {
-      refetchUsdo();
-      refetchUsdc();
-      refetchAllowance();
-      setAmount("");
-      setTxHash(undefined);
+            // 5. Get Allowance
+            const _allowance = await publicClient.readContract({
+                address: usdcAddress,
+                abi: ERC20_ABI,
+                functionName: "allowance",
+                args: [address as Address, usdoAddress],
+            }) as bigint;
+            setAllowance(_allowance);
+        }
+      }
+    } catch (error) {
+        console.error("Error fetching data:", error);
     }
-  }, [isSuccess, refetchUsdo, refetchUsdc, refetchAllowance]);
+  }, [publicClient, usdoAddress, usdcAddress, address]);
+
+  // Initial fetch and on dependencies change
+  useEffect(() => {
+    fetchData();
+    // Set up interval for refreshing data? Or just on mount/change.
+    const interval = setInterval(fetchData, 10000); 
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   if (!isConnected) {
     return (
@@ -104,7 +108,7 @@ export default function SwapUSDO() {
     );
   }
 
-  if (!usdoAddress || !usdcAddress) {
+  if (!usdoAddress) {
     return (
       <div className="p-6 border border-white/10 bg-white/5 text-center">
         <p className="text-white/60 text-sm font-mono">
@@ -115,66 +119,88 @@ export default function SwapUSDO() {
   }
 
   const handleAction = async () => {
-    if (!amount || !usdcDecimals) return;
+    if (!amount || !usdcDecimals || !walletClient || !publicClient || !address || !usdcAddress) return;
     const parsedAmount = parseUnits(amount, usdcDecimals);
 
+    setIsPending(true);
+    setTxHash(undefined);
+
     try {
+      let hash: `0x${string}`;
+
       if (isWrapping) {
         // Wrap: Approve USDC -> Deposit
-        if (!allowance || allowance < parsedAmount) {
-          const tx = await writeContractAsync({
-            address: usdcAddress as Address,
-            abi: ERC20_ABI,
-            functionName: "approve",
-            args: [usdoAddress, parsedAmount],
-          });
-          setTxHash(tx);
-          // Note: Ideally we wait for approval receipt before deposit, but for simple UX here we might need two clicks or better flow
-          // Let's keep it simple: if approval needed, just approve. User clicks again to deposit.
-          return;
+        if (allowance < parsedAmount) {
+            // Need approval
+             hash = await walletClient.writeContract({
+                address: usdcAddress,
+                abi: ERC20_ABI,
+                functionName: "approve",
+                args: [usdoAddress, parsedAmount],
+                account: address as Address, 
+                chain: chain
+            });
+            // Simple UX: just approve first, let user click again to deposit or auto-continue? 
+            // The original code returned after approval. I'll stick to that.
+            setTxHash(hash);
+            setIsConfirming(true);
+            await publicClient.waitForTransactionReceipt({ hash });
+            setIsConfirming(false);
+            fetchData();
+            setIsPending(false);
+            return;
         }
 
-        const tx = await writeContractAsync({
+        // Deposit
+        hash = await walletClient.writeContract({
           address: usdoAddress,
           abi: USDO_ABI,
           functionName: "deposit",
           args: [parsedAmount],
+          account: address as Address,
+          chain: chain
         });
-        setTxHash(tx);
+
       } else {
-        // Unwrap: Withdraw (no approval needed for burning own tokens usually, check logic)
-        // USDO.withdraw burns msg.sender tokens. No approval needed for contract to burn sender tokens?
-        // Actually USDO.withdraw calls _burn(msg.sender, amount). ERC20 burn doesn't need allowance if owner calls it.
-        const tx = await writeContractAsync({
+        // Unwrap: Withdraw
+        hash = await walletClient.writeContract({
           address: usdoAddress,
           abi: USDO_ABI,
           functionName: "withdraw",
           args: [parsedAmount],
+          account: address as Address,
+          chain: chain
         });
-        setTxHash(tx);
       }
+
+      setTxHash(hash);
+      setIsConfirming(true);
+      await publicClient.waitForTransactionReceipt({ hash });
+      setIsConfirming(false);
+      
+      // Success handling
+      setAmount("");
+      setTxHash(undefined);
+      fetchData();
+
     } catch (e) {
       console.error(e);
+    } finally {
+        setIsPending(false);
+        setIsConfirming(false);
     }
   };
 
   const decimals = usdcDecimals || 6;
   const maxBalance = isWrapping
-    ? usdcBalance
-      ? formatUnits(usdcBalance, decimals)
-      : "0"
-    : usdoBalance
-    ? formatUnits(usdoBalance as bigint, decimals)
-    : "0";
+    ? formatUnits(usdcBalance, decimals)
+    : formatUnits(usdoBalance, decimals);
 
   const needsApproval =
     isWrapping &&
     allowance !== undefined &&
     amount &&
     parseUnits(amount, decimals) > allowance;
-
-  const networkName =
-    chainId === 8453 ? "Base" : chainId === 137 ? "Polygon" : "Unknown";
 
   return (
     <div className="bg-white/5 border border-white/10 p-6">
@@ -267,37 +293,24 @@ export default function SwapUSDO() {
                 </svg>
                 <span className="text-sm text-white font-mono">Base</span>
               </div>
-            ) : (
+            ) : chainId === 137 ? (
               <div className="flex items-center gap-2">
                 <svg width="16" height="16" viewBox="0 0 38.4 33.5" fill="none">
                   <path
-                    d="M29,10.2c-0.7-0.4-1.6-0.4-2.4,0L21,13.5l-3.8,2.1l-5.5,3.3c-0.7,0.4-1.6,0.4-2.4,0L5,16.3 c-0.7-0.4-1.2-1.2-1.2-2.1v-5c0-0.8,0.4-1.6,1.2-2.1l4.3-2.5c0.7-0.4,1.6-0.4,2.4,0L16,7.2c0.7,0.4,1.2,1.2,1.2,2.1v3.3l3.8-2.2V7 c0-0.8-0.4-1.6-1.2-2.1l-8-4.7c-0.7-0.4-1.6-0.4-2.4,0L1.2,5C0.4,5.4,0,6.2,0,7v9.4c0,0.8,0.4,1.6,1.2,2.1l8.1,4.7 c0.7,0.4,1.6,0.4,2.4,0l5.5-3.2l3.8-2.2l5.5-3.2c0.7-0.4,1.6-0.4,2.4,0l4.3,2.5c0.7,0.4,1.2,1.2,1.2,2.1v5c0,0.8-0.4,1.6-1.2,2.1 L29,28.8c-0.7,0.4-1.6,0.4-2.4,0l-4.3-2.5c-0.7-0.4-1.2-1.2-1.2-2.1V21l-3.8,2.2v3.3c0,0.8,0.4,1.6,1.2,2.1l8.1,4.7 c0.7,0.4,1.6,0.4,2.4,0l8.1-4.7c0.7-0.4,1.2-1.2,1.2-2.1V17c0-0.8-0.4-1.6-1.2-2.1L29,10.2z"
+                    d="M29,10.2c-0.7-0.4-1.6-0.4-2.4,0L21,13.5l-3.8,2.1l-5.5,3.3c-0.7,0.4-1.6,0.4-2.4,0L5,16.3 c-0.7-0.4-1.2-1.2-1.2-2.1v-5c0-0.8,0.4-1.6,1.2-2.1l4.3-2.5c0.7-0.4,1.6-0.4,2.4,0L16,7.2c0.7,0.4,1.2,1.2,1.2,2.1v3.3l3.8-2.2V7 c0-0.8-0.4-1.6-1.2-2.1l-8-4.7c-0.7-0.4-1.6-0.4-2.4,0L1.2,5C0.4,5.4,0,6.2,0,7v9.4c0,0.8,0.4,1.6,1.2,2.1l8.1,4.7 c0.7,0.4,1.6,0.4,2.4,0l5.5-3.2l3.8-2.2l5.5-3.2c0.7-0.4,1.6-0.4,2.4,0l4.3,2.5c0.7-0.4,1.2,1.2,1.2,2.1v5c0,0.8-0.4,1.6-1.2,2.1 L29,28.8c-0.7,0.4-1.6,0.4-2.4,0l-4.3-2.5c-0.7-0.4-1.2-1.2-1.2-2.1V21l-3.8,2.2v3.3c0,0.8,0.4,1.6,1.2,2.1l8.1,4.7 c0.7,0.4,1.6,0.4,2.4,0l8.1-4.7c0.7-0.4,1.2-1.2,1.2-2.1V17c0-0.8-0.4-1.6-1.2-2.1L29,10.2z"
                     fill="white"
                   />
                 </svg>
                 <span className="text-sm text-white font-mono">Polygon</span>
               </div>
+            ) : (
+                <div className="flex items-center gap-2">
+                 <span className="text-sm text-white font-mono">Unknown Network</span>
+                </div>
             )}
           </div>
-          <button
-            onClick={() => open({ view: "Networks" })}
-            className="text-xs text-white/50 hover:text-white font-mono uppercase tracking-wider transition-colors flex items-center gap-1"
-          >
-            Switch
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-              />
-            </svg>
-          </button>
+          
+      {/* Network Switch Button - Removed or kept as non-functional if not supported */}
         </div>
 
         {txHash && (

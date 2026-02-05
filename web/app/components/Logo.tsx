@@ -16,14 +16,14 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <circle cx="50" cy="50" r="8" fill="white" />
+        <circle cx="50" cy="50" r="8" fill="#FCD535" />
 
         <line
           x1="50"
           y1="42"
           x2="50"
           y2="15"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2.5"
           strokeLinecap="round"
         />
@@ -32,7 +32,7 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="50"
           x2="85"
           y2="50"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2.5"
           strokeLinecap="round"
         />
@@ -41,7 +41,7 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="58"
           x2="50"
           y2="85"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2.5"
           strokeLinecap="round"
         />
@@ -50,7 +50,7 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="50"
           x2="15"
           y2="50"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2.5"
           strokeLinecap="round"
         />
@@ -60,7 +60,7 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="44"
           x2="75"
           y2="25"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -69,7 +69,7 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="56"
           x2="75"
           y2="75"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -78,7 +78,7 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="56"
           x2="25"
           y2="75"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -87,26 +87,26 @@ export default function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
           y1="44"
           x2="25"
           y2="25"
-          stroke="white"
+          stroke="#FCD535"
           strokeWidth="2"
           strokeLinecap="round"
         />
 
-        <circle cx="50" cy="15" r="3" fill="white" />
-        <circle cx="85" cy="50" r="3" fill="white" />
-        <circle cx="50" cy="85" r="3" fill="white" />
-        <circle cx="15" cy="50" r="3" fill="white" />
+        <circle cx="50" cy="15" r="3" fill="#FCD535" />
+        <circle cx="85" cy="50" r="3" fill="#FCD535" />
+        <circle cx="50" cy="85" r="3" fill="#FCD535" />
+        <circle cx="15" cy="50" r="3" fill="#FCD535" />
 
-        <circle cx="75" cy="25" r="2.5" fill="white" />
-        <circle cx="75" cy="75" r="2.5" fill="white" />
-        <circle cx="25" cy="75" r="2.5" fill="white" />
-        <circle cx="25" cy="25" r="2.5" fill="white" />
+        <circle cx="75" cy="25" r="2.5" fill="#FCD535" />
+        <circle cx="75" cy="75" r="2.5" fill="#FCD535" />
+        <circle cx="25" cy="75" r="2.5" fill="#FCD535" />
+        <circle cx="25" cy="25" r="2.5" fill="#FCD535" />
       </svg>
 
       <div className="flex items-baseline gap-1">
-        <span className={`${d.text} font-black tracking-tighter`}>OMNIX</span>
+        <span className={`${d.text} font-black tracking-tighter text-[#FCD535]`}>YELLOW</span>
         <span className={`${d.code} font-mono text-white/60 tracking-widest`}>
-          402
+          X402
         </span>
       </div>
     </div>

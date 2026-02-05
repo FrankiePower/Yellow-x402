@@ -19,11 +19,11 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
       <nav className="border-b border-white/10 bg-black/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 h-16 md:h-20 flex justify-between items-center">
           <Link href="/" className="flex items-baseline gap-1.5">
-            <span className="text-xl md:text-2xl font-black tracking-tighter">
-              OMNIX
+            <span className="text-xl md:text-2xl font-black tracking-tighter text-[#FCD535]">
+              YELLOW
             </span>
             <span className="text-sm md:text-base font-mono text-white/60 tracking-widest">
-              402
+              X402
             </span>
           </Link>
 

@@ -17,14 +17,14 @@ export default function Home() {
                 <div className="flex items-center gap-3 md:gap-4 mb-2 md:mb-4">
                   <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-white"></div>
                   <div className="h-px w-8 md:w-12 bg-white/40"></div>
-                  <span className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase font-mono text-white/50">
-                    Crosschain X402 Payments
+                  <span className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase font-mono text-[#FCD535]/80">
+                    Yellow X402 Payments
                   </span>
                 </div>
 
-                <h1 className="text-[4rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] font-bold leading-[0.8] tracking-[-0.05em] text-white">
-                  OMNIX
-                  <span className="block text-zinc-500 ml-1 md:ml-2 lg:ml-4">
+                <h1 className="text-[4rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] font-bold leading-[0.8] tracking-[-0.05em] text-[#FCD535]">
+                  YELLOW
+                  <span className="block text-white ml-1 md:ml-2 lg:ml-4">
                     402
                   </span>
                 </h1>

@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-8 md:px-12 py-12">
         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-sm text-white/40">
-            <p className="font-mono">Omnix402</p>
+            <p className="font-mono">Yellow X402</p>
             <p className="text-xs mt-1">Cross-chain payments for AI agents</p>
           </div>
 
