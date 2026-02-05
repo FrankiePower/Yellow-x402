@@ -65,7 +65,7 @@ graph TB
         Yellow_API -->|"7. Data Released (ms)"| Agents
         
         %% Loop
-        linkStyle 9,10,11,12,13,14 stroke-width:4px,fill:none,stroke:#FCD535;
+        linkStyle 10,11,12,13,14,15 stroke-width:4px,fill:none,stroke:#FCD535;
         
         %% Settlement
         Agents --"8. Close Channel (1 Tx)"--> Custody
