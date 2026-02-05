@@ -18,62 +18,57 @@ This diagram contrasts a traditional "On-Chain" x402 implementation against the 
 Imagine **1,000 AI Agents** attempting to buy market data every second.
 
 ```mermaid
-graph TB
-    subgraph "SCENARIO: High Frequency Trading (1,000 Agents x 100 Transactions/sec)"
+flowchart LR
+    %% Global Styling
+    classDef plain fill:#fff,stroke:#9e9e9e,stroke-width:1px,color:#000;
+    classDef red fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#c62828;
+    classDef gold fill:#fffde7,stroke:gold,stroke-width:2px,color:#af861f;
+    
+    %% Left Side: Traditional
+    subgraph TRADITIONAL ["TRADITIONAL x402 (The Problem)"]
         direction TB
-        Agents[🤖 1,000 AI Agents]
+        T_Agents("🤖 1,000 Agents"):::plain
+        T_API("📡 Service API"):::plain
+        L1("⛓️ Ethereum L1"):::red
+        
+        T_Agents -->|"1. GET /price"| T_API
+        T_API -->|"2. 402 Pay"| T_Agents
+        T_Agents -->|"3. TX ($$$ GAS)"| L1
+        L1 -.-|"4. CONGESTION"| L1
+        L1 -->|"5. Confirmed (15s+)"| T_API
+        T_API -->|"6. Data"| T_Agents
+
+        Err[/"❌ NETWORK CLOGGED<br/>❌ FEES > DATA VALUE<br/>❌ LATENCY KILLS ALPHA"/]:::red
+        L1 --- Err
     end
 
-    subgraph "TRADITIONAL x402 (The Problem)"
+    %% Right Side: Yellow
+    subgraph YELLOW ["🟡 YELLOW NETWORK (The Solution)"]
         direction TB
-        Trad_API[📡 Service API]
-        L1_Chain[⛓️ Ethereum L1]
+        Y_Agents("🤖 1,000 Agents"):::gold
+        Y_API("⚡ Service API"):::gold
+        Node["🟡 ClearNode (State Channel)"]:::gold
+        Custody("🔒 L1 Custody"):::plain
         
-        Agents -->|"1. GET /price"| Trad_API
-        Trad_API -->|"2. 402 Pay 1 USDC"| Agents
+        %% Setup
+        Y_Agents --"1. Open Channel"--> Custody
+        Custody -.-o Node
+
+        %% Fast Loop
+        Y_Agents -->|"2. GET /price"| Y_API
+        Y_API -->|"3. 402 Pay"| Y_Agents
         
-        Agents -->|"3. BROADCAST TX ($$$ GAS)"| L1_Chain
-        L1_Chain -.->|"4. CONGESTION / WAITING"| L1_Chain
-        L1_Chain -->|"5. Tx Confirmed (15s+)"| Trad_API
-        
-        Trad_API -->|"6. Data Released"| Agents
-        
-        style L1_Chain fill:#ff9999,stroke:#ff0000,stroke-width:4px,stroke-dasharray: 5 5
-        note_trad[/"❌ NETWORK CLOGGED<br/>❌ GAS FEE > DATA VALUE<br/>❌ LATENCY KILLS ALPHA"/]
-        L1_Chain --- note_trad
+        Y_Agents -->|"4. SIGN & SEND"| Node
+        Node -->|"5. INSTANT SETTLE"| Node
+        Node -.->|"6. 'tr' PUSH"| Y_API
+        Y_API -->|"7. DATA Leased (ms)"| Y_Agents
+
+        Win[/"✅ INSTANT FINALITY<br/>✅ ZERO GAS / TX<br/>✅ UNLIMITED TPS"/]:::gold
+        Node --- Win
     end
 
-    subgraph "YELLOW NETWORK (The Solution)"
-        direction TB
-        Yellow_API[⚡ Service API]
-        Yellow_Node["🟡 ClearNode (State Channel)"]
-        Custody[🔒 L1 Custody Contract]
-
-        %% Setup Phase
-        Agents --"1. Open Channel (1 Tx)"--> Box_Setup[Setup Phase]
-        Box_Setup --> Custody
-        Box_Setup -.->|"Channel indexed"| Yellow_Node
-
-        %% High Frequency Loop
-        Agents -->|"2. GET /price"| Yellow_API
-        Yellow_API -->|"3. 402 Pay 0.0001 yUSD"| Agents
-        
-        Agents -->|"4. Sign & Send (Off-chain)"| Yellow_Node
-        Yellow_Node -->|"5. Instant Settlement (NO GAS)"| Yellow_Node
-         Yellow_Node -.->|"6. 'tr' Notification"| Yellow_API
-        
-        Yellow_API -->|"7. Data Released (ms)"| Agents
-        
-        %% Loop
-        linkStyle 10,11,12,13,14,15 stroke-width:4px,fill:none,stroke:gold;
-        
-        %% Settlement
-        Agents --"8. Close Channel (1 Tx)"--> Custody
-        
-        style Yellow_Node fill:#fffde7,stroke:gold,stroke-width:4px
-        note_yellow[/"✅ INSTANT FINALITY<br/>✅ ZERO GAS / TX<br/>✅ MILLIONS of TPS"/]
-        Yellow_Node --- note_yellow
-    end
+    %% Styles for Yellow Loop (Indices depend on definition order)
+    linkStyle 10,11,12,13,14,15,16 stroke:gold,stroke-width:3px;
 ```
 
 ### Breakdown
