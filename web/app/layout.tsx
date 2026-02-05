@@ -15,25 +15,22 @@ const azeretMono = Azeret_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OMNIX402",
+  title: "YELLOW X402",
   description:
     "Enabling agents to reach any X402 sellers from any chain through an OFT using custom EIP-3009",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const headersObj = await headers();
-  const cookies = headersObj.get("cookie");
-
   return (
     <html lang="en">
       <body
         className={`${spaceGrotesk.variable} ${azeretMono.variable} antialiased`}
       >
-        <ContextProvider cookies={cookies}>{children}</ContextProvider>
+        <ContextProvider>{children}</ContextProvider>
       </body>
     </html>
   );
