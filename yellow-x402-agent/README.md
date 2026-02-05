@@ -67,8 +67,8 @@ flowchart LR
         Node --- Win
     end
 
-    %% Styles for Yellow Loop (Indices depend on definition order)
-    linkStyle 9,10,11,12,13,14 stroke:gold,stroke-width:3px;
+    %% Styles for Yellow Loop (Indices stripped to fix render error)
+
 ```
 
 ### Breakdown
