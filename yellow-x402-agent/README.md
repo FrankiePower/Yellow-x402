@@ -68,7 +68,7 @@ flowchart LR
     end
 
     %% Styles for Yellow Loop (Indices depend on definition order)
-    linkStyle 10,11,12,13,14,15,16 stroke:gold,stroke-width:3px;
+    linkStyle 9,10,11,12,13,14 stroke:gold,stroke-width:3px;
 ```
 
 ### Breakdown
