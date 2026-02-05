@@ -7,33 +7,14 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-sm text-white/40">
             <p className="font-mono">Yellow X402</p>
-            <p className="text-xs mt-1">Cross-chain payments for AI agents</p>
+            <p className="text-xs mt-1">High Frequency payments for AI agents</p>
           </div>
 
           <div className="flex items-center gap-8">
-            <Link
-              href="https://ethglobal.com/showcase/omnix402-hkrwm"
-              target="_blank"
-              className="flex items-center gap-3 text-sm text-white/60 hover:text-white transition-all duration-200 group"
-            >
-              <svg
-                className="w-5 h-5 group-hover:scale-110 transition-transform duration-200"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-                />
-              </svg>
-              <span>EthGlobal</span>
-            </Link>
+
 
             <Link
-              href="https://github.com/0xKairn/Omnix402"
+              href="https://github.com/FrankiePower/Yellow-x402"
               target="_blank"
               className="flex items-center gap-3 text-sm text-white/60 hover:text-white transition-all duration-200 group"
             >

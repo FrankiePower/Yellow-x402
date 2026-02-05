@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useYellow } from "@/hooks/useYellow";
-import Logo from "./Logo";
 import { NetworkButton } from "./NetworkButton";
 import { ConnectButton } from "./ConnectButton";
-// import SwapUSDO from "./SwapUSDO";
-// import SwapUSDO from "./SwapUSDO";
+
 
 
 interface HeaderProps {
@@ -15,7 +13,7 @@ interface HeaderProps {
 }
 
 export default function Header({ showConnectWallet = false }: HeaderProps) {
-  // const [isSwapOpen, setIsSwapOpen] = useState(false);
+ 
   const { address } = useYellow();
   const [isRequestingFaucet, setIsRequestingFaucet] = useState(false);
 
@@ -110,20 +108,6 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
         </div>
       </nav>
 
-      {/* Swap Modal - Disabled for now
-      {isSwapOpen && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-md">
-            <button
-              onClick={() => setIsSwapOpen(false)}
-              className="absolute -top-12 right-0 text-white/60 hover:text-white text-xs uppercase tracking-widest"
-            >
-              Close [X]
-            </button>
-            <SwapUSDO />
-          </div>
-        </div>
-      )} */}
     </>
   );
 }

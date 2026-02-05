@@ -11,49 +11,79 @@ A buyer agent and a paid resource service that speak the x402 protocol.  The buy
 
 ---
 
-## Architecture
+## Architecture Comparison
 
-```
-Buyer                          Service                        ClearNode / Sepolia
-  │                               │                                  │
-  │── ① EIP-712 auth ─────────────────────────────────────►         │
-  │◄── auth_verify ──────────────────────────────────────────       │
-  │                               │  (same auth, independently)     │
-  │                               │                                  │
-  │── ② createCreateChannelMsg ──────────────────────────►          │  ← RPC
-  │◄── { channel_id, state, server_signature } ──────────            │
-  │                               │                                  │
-  │── ③ GET /resource ─────────►  │                                  │  ← paid requests
-  │◄── 402 { accepts: [...] } ──  │                                  │     (instant, no
-  │                               │                                  │      on-chain needed)
-  │── createTransferMessage ─────────────────────────────────────► ClearNode  ← ledger
-  │◄── { transactions: [tx] } ───────────────────────────────────   │
-  │                               │◄── "tr" notification (push) ──  │
-  │                               │    (caches tx)                   │
-  │                               │                                  │
-  │── GET /resource               │                                  │
-  │   X-PAYMENT: base64(receipt)  │                                  │
-  │──────────────────────────►    │                                  │
-  │                               │  decode → find tx in cache       │
-  │                               │  verify asset + amount + dest    │
-  │◄── 200 { resource } ──────────│                                  │
-  │   (repeat for /data, /quote)  │                                  │
-  │                               │                                  │
-  │── ⑤a createChannel tx ──────────────────────────────────────► Sepolia  ← on-chain (1 of 2)
-  │◄── receipt ─────────────────────────────────────────────────    │
-  │    (3 s wait for ClearNode to index)                            │
-  │                               │                                  │
-  │── ④ createCloseChannelMsg ───────────────────────────────────► ClearNode  ← RPC
-  │◄── { state (final), server_signature } ──────────────────────   │
-  │                               │                                  │
-  │── ⑤b closeChannel tx ───────────────────────────────────────► Sepolia  ← on-chain (2 of 2)
-  │◄── receipt ─────────────────────────────────────────────────    │
+This diagram contrasts a traditional "On-Chain" x402 implementation against the "Yellow Network State Channel" approach, specifically for High-Frequency AI Agent scenarios.
+
+Imagine **1,000 AI Agents** attempting to buy market data every second.
+
+```mermaid
+graph TB
+    subgraph "SCENARIO: High Frequency Trading (1,000 Agents x 100 Transactions/sec)"
+        direction TB
+        Agents[🤖 1,000 AI Agents]
+    end
+
+    subgraph "TRADITIONAL x402 (The Problem)"
+        direction TB
+        Trad_API[📡 Service API]
+        L1_Chain[⛓️ Ethereum L1]
+        
+        Agents -->|"1. GET /price"| Trad_API
+        Trad_API -->|"2. 402 Pay 1 USDC"| Agents
+        
+        Agents -->|"3. BROADCAST TX ($$$ GAS)"| L1_Chain
+        L1_Chain -.->|"4. CONGESTION / WAITING"| L1_Chain
+        L1_Chain -->|"5. Tx Confirmed (15s+)"| Trad_API
+        
+        Trad_API -->|"6. Data Released"| Agents
+        
+        style L1_Chain fill:#ff9999,stroke:#ff0000,stroke-width:4px,stroke-dasharray: 5 5
+        note_trad[/"❌ NETWORK CLOGGED<br/>❌ GAS FEE > DATA VALUE<br/>❌ LATENCY KILLS ALPHA"/]
+        L1_Chain --- note_trad
+    end
+
+    subgraph "YELLOW NETWORK (The Solution)"
+        direction TB
+        Yellow_API[⚡ Service API]
+        Yellow_Node[🟡 ClearNode (State Channel)]
+        Custody[🔒 L1 Custody Contract]
+
+        %% Setup Phase
+        Agents --"1. Open Channel (1 Tx)"--> Box_Setup[Setup Phase]
+        Box_Setup --> Custody
+        Box_Setup -.->|"Channel indexed"| Yellow_Node
+
+        %% High Frequency Loop
+        Agents ==>"2. GET /price"==> Yellow_API
+        Yellow_API ==>"3. 402 Pay 0.0001 yUSD"==> Agents
+        
+        Agents ==>"4. Sign & Send (Off-chain)"==> Yellow_Node
+        Yellow_Node ==>"5. Instant Settlement (NO GAS)"==> Yellow_Node
+        Yellow_Node -.->"6. 'tr' Notification"-.-> Yellow_API
+        
+        Yellow_API ==>"7. Data Released (ms)"==> Agents
+        
+        %% Loop
+        linkStyle 9,10,11,12,13,14 stroke-width:4px,fill:none,stroke:#FCD535;
+        
+        %% Settlement
+        Agents --"8. Close Channel (1 Tx)"--> Custody
+        
+        style Yellow_Node fill:#fffde7,stroke:#FCD535,stroke-width:4px
+        note_yellow[/"✅ INSTANT FINALITY<br/>✅ ZERO GAS / TX<br/>✅ MILLIONS of TPS"/]
+        Yellow_Node --- note_yellow
+    end
 ```
 
-- **Buyer** and **Service** authenticate to ClearNode independently via EIP-712 challenge/response.
-- **Transfers** are ClearNode ledger operations — instant, no gas, return a receipt with a transaction `id`.
-- **Service** confirms payment via `"tr"` push notification matching the `transactionId`.  No signature verification — ClearNode is the source of truth.
-- **On-chain settlement** is 2 transactions total: `createChannel` locks the initial state, `closeChannel` finalises and releases funds.
+### Breakdown
+
+| Feature | Traditional x402 (On-Chain) | Yellow Network x402 (State Channels) |
+| :--- | :--- | :--- |
+| **Cost per Request** | **$2 - $50** (Gas Fees) | **$0.00** (Zero Gas) |
+| **Speed** | **12s - Minutes** (Block time) | **Milliseconds** (Network latency) |
+| **Throughput** | **15 - 50 TPS** (Network limit) | **Unlimited** (Peer-to-Peer) |
+| **Viability for AI** | ❌ Impossible for HFT | ✅ Perfect for Streaming Payments |
 
 ---
 
