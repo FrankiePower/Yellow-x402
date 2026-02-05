@@ -46,7 +46,7 @@ graph TB
     subgraph "YELLOW NETWORK (The Solution)"
         direction TB
         Yellow_API[⚡ Service API]
-        Yellow_Node[🟡 ClearNode (State Channel)]
+        Yellow_Node["🟡 ClearNode (State Channel)"]
         Custody[🔒 L1 Custody Contract]
 
         %% Setup Phase
