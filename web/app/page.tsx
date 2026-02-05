@@ -18,14 +18,14 @@ export default function Home() {
                   <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-white"></div>
                   <div className="h-px w-8 md:w-12 bg-white/40"></div>
                   <span className="text-[9px] md:text-[10px] tracking-[0.3em] uppercase font-mono text-[#FCD535]/80">
-                    Yellow X402 Payments
+                    Yellow X402 Agent Infrastructure
                   </span>
                 </div>
 
                 <h1 className="text-[4rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] font-bold leading-[0.8] tracking-[-0.05em] text-[#FCD535]">
                   YELLOW
                   <span className="block text-white ml-1 md:ml-2 lg:ml-4">
-                    402
+                    X402
                   </span>
                 </h1>
               </div>
@@ -33,11 +33,12 @@ export default function Home() {
               <div className="lg:col-span-4 flex flex-col justify-end pb-2 md:pb-4 gap-4 md:gap-6">
                 <div className="space-y-3 md:space-y-4 border-l border-white/20 pl-6 md:pl-8">
                   <p className="text-base md:text-xl text-white leading-relaxed font-light">
-                    Enabling agents to reach any X402 sellers from any chain
-                    through an OFT using custom EIP-3009.
+                    Unlock high-frequency agent commerce with instant, gas-free
+                    settlement. Process thousands of micro-transactions off-chain
+                    without the cost and latency of on-chain execution.
                   </p>
                   <p className="text-xs md:text-sm text-white/60 leading-relaxed font-mono">
-                    // Built on LayerZero OFT with USDO backed 1:1 by USDC.
+                    Powered by Yellow Network state channels.
                   </p>
                 </div>
               </div>
@@ -65,20 +66,6 @@ export default function Home() {
                   </span>
                 </button>
               </Link>
-
-              <a
-                href="https://ethglobal.com/showcase/omnix402-hkrwm"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto"
-              >
-                <button className="group relative w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 bg-black border border-white text-white overflow-hidden cursor-pointer">
-                  <div className="absolute inset-0 bg-white translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
-                  <span className="relative z-10 text-xs md:text-sm font-bold tracking-[0.15em] group-hover:text-black transition-colors duration-300">
-                    VIEW ETHGLOBAL SHOWCASE
-                  </span>
-                </button>
-              </a>
             </div>
           </div>
         </div>
@@ -94,13 +81,13 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-4 md:gap-6 text-[9px] md:text-[10px] tracking-[0.2em] uppercase font-mono text-white/40">
               <a
-                href="https://github.com/0xKairn/Omnix402"
+                href="https://github.com/FrankiePower/Yellow-x402"
                 className="hover:text-white transition-colors cursor-pointer"
               >
                 GitHub
               </a>
               <a
-                href="#"
+                href="https://docs.yellow.org/docs/learn/getting-started/quickstart/"
                 className="hover:text-white transition-colors cursor-pointer"
               >
                 Documentation

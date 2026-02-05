@@ -48,28 +48,9 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
             )}
             {!showConnectWallet && (
               <>
+
                 <Link
-                  href="https://ethglobal.com/showcase/omnix402-hkrwm"
-                  target="_blank"
-                  className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs font-bold uppercase tracking-wider md:tracking-widest text-white/60 hover:text-white transition-colors cursor-pointer group"
-                >
-                  <svg
-                    className="w-5 h-5 group-hover:scale-110 transition-transform duration-200"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline">EthGlobal</span>
-                </Link>
-                <Link
-                  href="https://github.com/0xKairn/Omnix402"
+                  href="https://github.com/FrankiePower/Yellow-x402"
                   target="_blank"
                   className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs font-bold uppercase tracking-wider md:tracking-widest text-white/60 hover:text-white transition-colors cursor-pointer group"
                 >
