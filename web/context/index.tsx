@@ -28,6 +28,7 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
   const [publicClient, setPublicClient] = useState<PublicClient | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
 
+
   const connect = async () => {
     if (typeof window === "undefined" || !window.ethereum) {
       alert("Please install MetaMask or another Web3 wallet");
@@ -79,7 +80,7 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
 
     } catch (error) {
       console.error("Failed to connect:", error);
-      alert("Failed to connect wallet");
+      // alert("Failed to connect wallet");
     }
   };
 
@@ -90,6 +91,23 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
     setWalletClient(null);
     setPublicClient(null);
   };
+
+  // Auto-connect on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (typeof window !== "undefined" && window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts && accounts.length > 0) {
+            connect();
+          }
+        } catch (err) {
+          console.error("Error checking connection:", err);
+        }
+      }
+    };
+    checkConnection();
+  }, []);
 
   return (
     <YellowNetworkContext.Provider

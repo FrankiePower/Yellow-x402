@@ -2,18 +2,51 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useYellow } from "@/hooks/useYellow";
 import Logo from "./Logo";
 import { NetworkButton } from "./NetworkButton";
 import { ConnectButton } from "./ConnectButton";
-import SwapUSDO from "./SwapUSDO";
-import WalletBalance from "./WalletBalance";
+// import SwapUSDO from "./SwapUSDO";
+// import SwapUSDO from "./SwapUSDO";
+
 
 interface HeaderProps {
   showConnectWallet?: boolean;
 }
 
 export default function Header({ showConnectWallet = false }: HeaderProps) {
-  const [isSwapOpen, setIsSwapOpen] = useState(false);
+  // const [isSwapOpen, setIsSwapOpen] = useState(false);
+  const { address } = useYellow();
+  const [isRequestingFaucet, setIsRequestingFaucet] = useState(false);
+
+  const handleFaucet = async () => {
+    if (!address) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    setIsRequestingFaucet(true);
+    try {
+      const response = await fetch("https://clearnet-sandbox.yellow.com/faucet/requestTokens", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userAddress: address }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Faucet request failed");
+      }
+
+      alert("Tokens requested successfully! Check your Unified Balance (Off-Chain).");
+    } catch (error) {
+      console.error("Faucet error:", error);
+      alert("Failed to request tokens. Please try again.");
+    } finally {
+      setIsRequestingFaucet(false);
+    }
+  };
 
   return (
     <>
@@ -32,18 +65,17 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
             {showConnectWallet && (
               <>
                 <button
-                  onClick={() => setIsSwapOpen(true)}
-                  className="group relative px-3 md:px-4 py-1.5 md:py-2 border border-white/20 hover:border-white text-white text-[10px] md:text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer overflow-hidden"
+                  onClick={handleFaucet}
+                  disabled={isRequestingFaucet}
+                  className="group relative px-3 md:px-4 py-1.5 md:py-2 border border-white/20 hover:border-white text-white text-[10px] md:text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="absolute inset-0 bg-white -translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></span>
                   <span className="relative z-10 group-hover:text-black transition-colors duration-300">
-                    Get USDO
+                    {isRequestingFaucet ? "Requesting..." : "Get ytest.usd"}
                   </span>
                 </button>
                 <div className="hidden md:block h-5 w-px bg-white/10"></div>
-                <div className="hidden md:block">
-                  <WalletBalance />
-                </div>
+
                 <div className="hidden md:block">
                   <NetworkButton />
                 </div>
@@ -78,7 +110,7 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
         </div>
       </nav>
 
-      {/* Swap Modal */}
+      {/* Swap Modal - Disabled for now
       {isSwapOpen && (
         <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-md">
@@ -91,7 +123,7 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
             <SwapUSDO />
           </div>
         </div>
-      )}
+      )} */}
     </>
   );
 }
