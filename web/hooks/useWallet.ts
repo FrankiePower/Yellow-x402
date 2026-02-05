@@ -3,11 +3,12 @@
 import { useYellow } from "./useYellow";
 
 export function useWallet() {
-  const { address, isConnected, connect } = useYellow();
+  const { address, isConnected, connect, disconnect } = useYellow();
 
   return {
     address,
     isConnected,
     connect,
+    disconnect,
   };
 }

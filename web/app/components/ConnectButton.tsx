@@ -3,7 +3,7 @@
 import { useWallet } from "@/hooks/useWallet";
 
 export function ConnectButton() {
-  const { address, isConnected, connect } = useWallet();
+  const { address, isConnected, connect, disconnect } = useWallet();
 
   if (!isConnected) {
     return (
@@ -22,11 +22,16 @@ export function ConnectButton() {
 
   return (
     <button
-      onClick={connect}
+      onClick={disconnect}
       type="button"
-      className="px-4 py-2 bg-white/5 border border-white/10 font-mono text-sm hover:bg-white/10 transition-colors cursor-pointer"
+      className="group px-4 py-2 bg-white/5 border border-white/10 font-mono text-sm hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-500 transition-all cursor-pointer min-w-[140px]"
     >
-      {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connected"}
+      <span className="group-hover:hidden">
+        {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connected"}
+      </span>
+      <span className="hidden group-hover:block">
+        Disconnect
+      </span>
     </button>
   );
 }

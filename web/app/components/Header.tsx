@@ -6,6 +6,7 @@ import Logo from "./Logo";
 import { NetworkButton } from "./NetworkButton";
 import { ConnectButton } from "./ConnectButton";
 import SwapUSDO from "./SwapUSDO";
+import WalletBalance from "./WalletBalance";
 
 interface HeaderProps {
   showConnectWallet?: boolean;
@@ -40,6 +41,9 @@ export default function Header({ showConnectWallet = false }: HeaderProps) {
                   </span>
                 </button>
                 <div className="hidden md:block h-5 w-px bg-white/10"></div>
+                <div className="hidden md:block">
+                  <WalletBalance />
+                </div>
                 <div className="hidden md:block">
                   <NetworkButton />
                 </div>
