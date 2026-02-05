@@ -65,12 +65,12 @@ graph TB
         Yellow_API -->|"7. Data Released (ms)"| Agents
         
         %% Loop
-        linkStyle 10,11,12,13,14,15 stroke-width:4px,fill:none,stroke:#FCD535;
+        linkStyle 10,11,12,13,14,15 stroke-width:4px,fill:none,stroke:gold;
         
         %% Settlement
         Agents --"8. Close Channel (1 Tx)"--> Custody
         
-        style Yellow_Node fill:#fffde7,stroke:#FCD535,stroke-width:4px
+        style Yellow_Node fill:#fffde7,stroke:gold,stroke-width:4px
         note_yellow[/"✅ INSTANT FINALITY<br/>✅ ZERO GAS / TX<br/>✅ MILLIONS of TPS"/]
         Yellow_Node --- note_yellow
     end
