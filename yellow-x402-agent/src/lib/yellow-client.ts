@@ -23,6 +23,9 @@ import {
   createEIP712AuthMessageSigner,
   createAuthVerifyMessageFromChallenge,
   createTransferMessage,
+  createCreateChannelMessage,
+  createCloseChannelMessage,
+  createGetConfigMessage,
 } from '@erc7824/nitrolite';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { createWalletClient, http }                from 'viem';
@@ -52,6 +55,22 @@ export interface TransferParams {
   asset                : string;
   /** Amount as decimal string in base units */
   amount               : string;
+}
+
+/** Shape of the create_channel / close_channel response from ClearNode. */
+export interface ChannelInfo {
+  channel_id       : string;
+  /** Only present on create_channel — the channel fixture (participants, adjudicator, nonce). */
+  channel?         : { participants: string[]; adjudicator: string; challenge: number; nonce: number };
+  /** The state ClearNode prepared (allocations, version, intent). */
+  state            : {
+    intent         : number;
+    version        : number;
+    state_data     : string;
+    allocations    : Array<{ destination: string; token: string; amount: string }>;
+  };
+  /** ClearNode's signature over the state — can be submitted on-chain for settlement. */
+  server_signature : string;
 }
 
 // ── constants ──────────────────────────────────────────────
@@ -123,6 +142,50 @@ export class YellowClient extends EventEmitter {
     return (data.transactions ?? (Array.isArray(data) ? data : [data])) as TransferTx[];
   }
 
+  /**
+   * Open a state channel via ClearNode RPC.
+   * ClearNode returns the channel fixture + initial state + its signature.
+   * That signed state can later be submitted on-chain to lock funds.
+   */
+  async createChannel(params: { chain_id: number; token: string }): Promise<ChannelInfo> {
+    if (!this._authenticated) throw new Error('[YellowClient] not authenticated');
+    const msg = await createCreateChannelMessage(this.sessionSigner, {
+      chain_id: params.chain_id,
+      token   : params.token as Address,
+    });
+    this.ws.send(msg);
+    return this.waitFor('create_channel') as Promise<ChannelInfo>;
+  }
+
+  /**
+   * Close a state channel via ClearNode RPC.
+   * ClearNode returns the signed final state — submitting it on-chain
+   * settles the channel and sends remaining funds to fundDestination.
+   */
+  async closeChannel(channelId: string, fundDestination: Address): Promise<ChannelInfo> {
+    if (!this._authenticated) throw new Error('[YellowClient] not authenticated');
+    const msg = await createCloseChannelMessage(
+      this.sessionSigner,
+      channelId as `0x${string}`,
+      fundDestination,
+    );
+    this.ws.send(msg);
+    return this.waitFor('close_channel') as Promise<ChannelInfo>;
+  }
+
+  /**
+   * Fetch ClearNode supported assets.
+   * createGetConfigMessage fires two responses: "assets" (the list we need)
+   * and "get_config" (networks/broker).  We only need "assets".
+   * Call after connect() — uses the session signer.
+   */
+  async getConfig(): Promise<{ assets?: Array<{ token: string; chain_id?: number; chainId?: number; symbol?: string; decimals?: number }>; [k: string]: any }> {
+    if (!this._authenticated) throw new Error('[YellowClient] not authenticated');
+    const msg = await createGetConfigMessage(this.sessionSigner);
+    this.ws.send(msg);
+    return this.waitFor('assets');   // first response; "get_config" follows but has no asset list
+  }
+
   close() { this.ws?.close(); }
 
   // ── message router ───────────────────────────────────────
@@ -161,6 +224,14 @@ export class YellowClient extends EventEmitter {
     if (method === 'auth_verify') {
       this._authenticated = true;
       this.emit('authenticated');
+      return;
+    }
+
+    // ── method-level error  { res: [id, "error", { error: "…" }] } ──
+    // Must NOT fall through to emit('error') — Node throws on unhandled 'error' events.
+    if (method === 'error') {
+      console.error('[YellowClient] RPC error:', payload);
+      this.emit('rpc_error', payload);
       return;
     }
 

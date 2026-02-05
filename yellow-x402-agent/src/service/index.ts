@@ -164,6 +164,40 @@ app.get('/resource', async (req, res) => {
   });
 });
 
+app.get('/data', async (req, res) => {
+  const tx = await requirePayment(req, res, {
+    price       : '500000',
+    description : 'Access to analytics data',
+  });
+  if (!tx) return;
+
+  res.json({
+    message       : 'Payment confirmed. Here is your analytics data.',
+    data          : { users: 1024, revenue: '$12,400', growth: '+23%' },
+    transactionId : tx.id,
+    paidAmount    : tx.amount,
+    asset         : tx.asset,
+    timestamp     : new Date().toISOString(),
+  });
+});
+
+app.get('/quote', async (req, res) => {
+  const tx = await requirePayment(req, res, {
+    price       : '200000',
+    description : 'Live market quote',
+  });
+  if (!tx) return;
+
+  res.json({
+    message       : 'Payment confirmed. Here is your market quote.',
+    data          : { symbol: 'ETH/USD', price: 3847.52, bid: 3846.10, ask: 3848.95 },
+    transactionId : tx.id,
+    paidAmount    : tx.amount,
+    asset         : tx.asset,
+    timestamp     : new Date().toISOString(),
+  });
+});
+
 // ── startup ────────────────────────────────────────────────
 async function main() {
   console.log('[service] connecting to ClearNode …');
