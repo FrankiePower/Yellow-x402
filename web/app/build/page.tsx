@@ -4,7 +4,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import HowItWorks from "./components/HowItWorks";
 import CodeExample from "./components/CodeExample";
-import DemoSection from "./components/DemoSection";
+import YellowDemo from "./components/YellowDemo";
 import Image from "next/image";
 
 export default function Build() {
@@ -16,12 +16,12 @@ export default function Build() {
         <div className="space-y-16 md:space-y-24">
           <section className="mb-12 md:mb-20">
             <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold leading-tight tracking-tight mb-3 md:mb-4">
-              How to Implement
+              Instant Micropayments
               <br />
-              Cross-Chain Payments
+              with Yellow Network
             </h1>
             <p className="text-2xl sm:text-3xl lg:text-4xl text-white/50 font-light">
-              for AI Agents
+              Gas-Free x402 Payments for AI Agents
             </p>
           </section>
 
@@ -39,7 +39,7 @@ export default function Build() {
           </section>
 
           <section className="max-w-5xl mx-auto">
-            <DemoSection />
+            <YellowDemo />
           </section>
 
           <section className="flex flex-col items-center">

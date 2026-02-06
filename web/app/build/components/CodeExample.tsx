@@ -5,67 +5,69 @@ import { useState } from "react";
 export default function CodeExample() {
   const [copied, setCopied] = useState(false);
 
-  const exampleCode = `// Complete X402 Cross-Chain Payment Flow
-// Access protected endpoints on Base using USDO from Polygon
+  const exampleCode = `// Complete Yellow Network x402 Payment Flow
+// Access protected endpoints with instant, gas-free micropayments
 
-// STEP 1: Request Payment Requirements
-const endpoint = encodeURIComponent('https://api.example.com/protected');
-const response = await fetch(
-  \`https://www.apifortest.shop/api/endpoint?endpoint=\${endpoint}&network=polygon\`
-);
+// STEP 1: Initialize Yellow Client
+import { YellowClient } from './yellow-client';
+
+const yellowClient = new YellowClient(privateKey, {
+  appName: 'my-x402-app',
+  clearnetUrl: 'wss://clearnet-sandbox.yellow.com/ws'
+});
+
+// Connect and authenticate to ClearNode
+await yellowClient.connect();
+console.log('Connected! Address:', yellowClient.address);
+
+// STEP 2: Request Protected Resource (Gets 402)
+const endpoint = '/resource';
+const response = await fetch(\`http://localhost:4000\${endpoint}\`);
+
+// Parse 402 Payment Required response
 const requirements = await response.json();
-// Response (402): { accepts: [{ network, payTo, maxAmountRequired, data }] }
-
-// STEP 2: Build EIP-3009 Authorization
 const accept = requirements.accepts[0];
-const nonce = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-const validAfter = Math.floor(Date.now() / 1000) - 60;
-const validBefore = validAfter + 3600;
 
-// Get USDO contract constants for EIP-712
-const usdoContract = new ethers.Contract(accept.payTo, USDO_ABI, provider);
-const TYPEHASH = await usdoContract.TRANSFER_WITH_AUTHORIZATION_EXTENDED_TYPEHASH();
-const DOMAIN_SEPARATOR = await usdoContract.DOMAIN_SEPARATOR();
+console.log('Payment required:');
+console.log(\`  Amount: \${accept.maxAmountRequired} \${accept.asset}\`);
+console.log(\`  Pay to: \${accept.payTo}\`);
 
-// Build EIP-712 struct hash
-const structHash = ethers.utils.keccak256(
-  ethers.utils.defaultAbiCoder.encode(
-    ['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256', 'bytes32', 'bytes'],
-    [TYPEHASH, wallet.address, accept.payTo, accept.maxAmountRequired, 
-     validAfter, validBefore, nonce, accept.data || '0x']
-  )
-);
+// STEP 3: Pay via Yellow Network (Off-Chain, Instant!)
+const transactions = await yellowClient.transfer({
+  destination: accept.payTo,
+  asset: accept.asset,
+  amount: accept.maxAmountRequired
+});
 
-// Sign EIP-712 digest
-const digest = ethers.utils.keccak256(
-  ethers.utils.solidityPack(['string', 'bytes32', 'bytes32'], 
-    ['\\x19\\x01', DOMAIN_SEPARATOR, structHash])
-);
-const signingKey = new ethers.utils.SigningKey(wallet.privateKey);
-const signature = ethers.utils.joinSignature(signingKey.signDigest(digest));
+const tx = transactions[0];
+console.log('✅ Payment sent!');
+console.log(\`  Transaction ID: \${tx.id}\`);
+console.log(\`  Amount: \${tx.amount} \${tx.asset}\`);
 
-// STEP 3: Build X402 Payload
-const x402Payload = {
-  x402Version: 1, scheme: 'exact', network: 'polygon',
+// STEP 4: Build X-PAYMENT Header
+const paymentPayload = {
+  scheme: 'yellow',
   payload: {
-    signature,
-    authorization: {
-      from: wallet.address, to: accept.payTo, value: accept.maxAmountRequired,
-      validAfter, validBefore, nonce, data: accept.data
-    }
+    transactionId: tx.id,
+    fromAccount: tx.from_account,
+    toAccount: tx.to_account,
+    asset: tx.asset,
+    amount: tx.amount
   }
 };
 
-// STEP 4: Execute Payment (bridge happens automatically)
-const result = await fetch(
-  \`https://www.apifortest.shop/api/endpoint?endpoint=\${endpoint}\`,
-  { method: 'POST', headers: { 'X-Payment': btoa(JSON.stringify(x402Payload)) } }
-);
+const xPaymentHeader = btoa(JSON.stringify(paymentPayload));
 
-// STEP 5: Receive Protected Content
-const content = await result.json();
-const paymentProof = result.headers.get('X-Payment-Response');
-console.log('Access granted!', content);`;
+// STEP 5: Retry Request with Payment Proof
+const paidResponse = await fetch(\`http://localhost:4000\${endpoint}\`, {
+  headers: { 'X-PAYMENT': xPaymentHeader }
+});
+
+const data = await paidResponse.json();
+console.log('✅ Resource received:', data);
+
+// That's it! Zero gas fees, instant settlement
+// The service confirmed payment via ClearNode notification`;
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(exampleCode);
@@ -81,7 +83,7 @@ console.log('Access granted!', content);`;
             API Usage Example
           </span>
           <span className="text-xs font-mono text-white/40 truncate">
-            // Cross-chain X402 with EIP-3009
+            // Yellow Network x402 Flow
           </span>
         </div>
         <button
@@ -95,244 +97,159 @@ console.log('Access granted!', content);`;
         <div className="code-scroll p-4 sm:p-6 md:p-8 bg-black overflow-auto max-h-[500px] sm:max-h-[600px]">
           <pre className="text-xs sm:text-sm font-mono leading-relaxed sm:leading-loose whitespace-pre">
             <span className="text-white/50">
-              // Complete X402 Cross-Chain Payment Flow
+              // Complete Yellow Network x402 Payment Flow
             </span>
             {"\n"}
             <span className="text-white/50">
-              // Access protected endpoints on Base using USDO from Polygon
+              // Access protected endpoints with instant, gas-free micropayments
             </span>
             {"\n\n"}
             <span className="text-white/50">
-              // STEP 1: Request Payment Requirements
+              // STEP 1: Initialize Yellow Client
             </span>
             {"\n"}
-            <span className="text-white">
-              const endpoint = encodeURIComponent(
-            </span>
-            <span className="text-emerald-400">
-              'https://api.example.com/protected'
-            </span>
-            <span className="text-white">);</span>
-            {"\n"}
-            <span className="text-white">const response = await fetch(</span>
-            {"\n"}
-            <span className="text-white"> </span>
-            <span className="text-emerald-400">
-              {
-                "`https://www.apifortest.shop/api/endpoint?endpoint=${endpoint}&network=polygon`"
-              }
-            </span>
-            {"\n"}
-            <span className="text-white">);</span>
-            {"\n"}
-            <span className="text-white">
-              const requirements = await response.json();
-            </span>
-            {"\n"}
-            <span className="text-white/50">
-              {
-                "// Response (402): { accepts: [{ network, payTo, maxAmountRequired, data }] }"
-              }
-            </span>
-            {"\n\n"}
-            <span className="text-white/50">
-              // STEP 2: Build EIP-3009 Authorization
-            </span>
-            {"\n"}
-            <span className="text-white">
-              const accept = requirements.accepts[0];
-            </span>
-            {"\n"}
-            <span className="text-white">
-              const nonce = ethers.utils.hexlify(ethers.utils.randomBytes(
-            </span>
-            <span className="text-purple-400">32</span>
-            <span className="text-white">));</span>
-            {"\n"}
-            <span className="text-white">
-              const validAfter = Math.floor(Date.now() /{" "}
-            </span>
-            <span className="text-purple-400">1000</span>
-            <span className="text-white">) - </span>
-            <span className="text-purple-400">60</span>
-            <span className="text-white">;</span>
-            {"\n"}
-            <span className="text-white">
-              const validBefore = validAfter +{" "}
-            </span>
-            <span className="text-purple-400">3600</span>
+            <span className="text-purple-400">import</span>
+            <span className="text-white"> {"{ "}YellowClient {" }"} </span>
+            <span className="text-purple-400">from</span>
+            <span className="text-emerald-400"> './yellow-client'</span>
             <span className="text-white">;</span>
             {"\n\n"}
-            <span className="text-white/50">
-              // Get USDO contract constants for EIP-712
-            </span>
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> yellowClient = </span>
+            <span className="text-purple-400">new</span>
+            <span className="text-white"> YellowClient(privateKey, {"{"}</span>
             {"\n"}
-            <span className="text-white">
-              const usdoContract = new ethers.Contract(accept.payTo, USDO_ABI,
-              provider);
-            </span>
-            {"\n"}
-            <span className="text-white">
-              const TYPEHASH = await
-              usdoContract.TRANSFER_WITH_AUTHORIZATION_EXTENDED_TYPEHASH();
-            </span>
-            {"\n"}
-            <span className="text-white">
-              const DOMAIN_SEPARATOR = await usdoContract.DOMAIN_SEPARATOR();
-            </span>
-            {"\n\n"}
-            <span className="text-white/50">// Build EIP-712 struct hash</span>
-            {"\n"}
-            <span className="text-white">
-              const structHash = ethers.utils.keccak256(
-            </span>
-            {"\n"}
-            <span className="text-white">
-              {" "}
-              ethers.utils.defaultAbiCoder.encode(
-            </span>
-            {"\n"}
-            <span className="text-white"> [</span>
-            <span className="text-emerald-400">'bytes32'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'address'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'address'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'uint256'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'uint256'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'uint256'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'bytes32'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'bytes'</span>
-            <span className="text-white">],</span>
-            {"\n"}
-            <span className="text-white">
-              {" "}
-              [TYPEHASH, wallet.address, accept.payTo, accept.maxAmountRequired,
-            </span>
-            {"\n"}
-            <span className="text-white">
-              {" "}
-              validAfter, validBefore, nonce, accept.data ||{" "}
-            </span>
-            <span className="text-emerald-400">'0x'</span>
-            <span className="text-white">]</span>
-            {"\n"}
-            <span className="text-white"> )</span>
-            {"\n"}
-            <span className="text-white">);</span>
-            {"\n\n"}
-            <span className="text-white/50">// Sign EIP-712 digest</span>
-            {"\n"}
-            <span className="text-white">
-              const digest = ethers.utils.keccak256(
-            </span>
-            {"\n"}
-            <span className="text-white"> ethers.utils.solidityPack([</span>
-            <span className="text-emerald-400">'string'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'bytes32'</span>
-            <span className="text-white">, </span>
-            <span className="text-emerald-400">'bytes32'</span>
-            <span className="text-white">],</span>
-            {"\n"}
-            <span className="text-white"> [</span>
-            <span className="text-emerald-400">'\\x19\\x01'</span>
-            <span className="text-white">, DOMAIN_SEPARATOR, structHash])</span>
-            {"\n"}
-            <span className="text-white">);</span>
-            {"\n"}
-            <span className="text-white">
-              const signingKey = new ethers.utils.SigningKey(wallet.privateKey);
-            </span>
-            {"\n"}
-            <span className="text-white">
-              const signature =
-              ethers.utils.joinSignature(signingKey.signDigest(digest));
-            </span>
-            {"\n\n"}
-            <span className="text-white/50">// STEP 3: Build X402 Payload</span>
-            {"\n"}
-            <span className="text-white">const x402Payload = {"{"}</span>
-            {"\n"}
-            <span className="text-white"> x402Version: </span>
-            <span className="text-purple-400">1</span>
-            <span className="text-white">, scheme: </span>
-            <span className="text-emerald-400">'exact'</span>
-            <span className="text-white">, network: </span>
-            <span className="text-emerald-400">'polygon'</span>
+            <span className="text-white">  appName: </span>
+            <span className="text-emerald-400">'my-x402-app'</span>
             <span className="text-white">,</span>
             {"\n"}
-            <span className="text-white"> payload: {"{"}</span>
+            <span className="text-white">  clearnetUrl: </span>
+            <span className="text-emerald-400">'wss://clearnet-sandbox.yellow.com/ws'</span>
             {"\n"}
-            <span className="text-white"> signature,</span>
-            {"\n"}
-            <span className="text-white"> authorization: {"{"}</span>
-            {"\n"}
-            <span className="text-white">
-              {" "}
-              from: wallet.address, to: accept.payTo, value:
-              accept.maxAmountRequired,
+            <span className="text-white">{"}"});</span>
+            {"\n\n"}
+            <span className="text-white/50">
+              // Connect and authenticate to ClearNode
             </span>
             {"\n"}
-            <span className="text-white">
-              {" "}
-              validAfter, validBefore, nonce, data: accept.data
+            <span className="text-purple-400">await</span>
+            <span className="text-white"> yellowClient.connect();</span>
+            {"\n"}
+            <span className="text-white">console.log(</span>
+            <span className="text-emerald-400">'Connected! Address:'</span>
+            <span className="text-white">, yellowClient.address);</span>
+            {"\n\n"}
+            <span className="text-white/50">
+              // STEP 2: Request Protected Resource (Gets 402)
             </span>
             {"\n"}
-            <span className="text-white"> {"}"}</span>
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> endpoint = </span>
+            <span className="text-emerald-400">'/resource'</span>
+            <span className="text-white">;</span>
             {"\n"}
-            <span className="text-white"> {"}"}</span>
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> response = </span>
+            <span className="text-purple-400">await</span>
+            <span className="text-white"> fetch(</span>
+            <span className="text-emerald-400">{"`"}http://localhost:4000${"{"}</span>
+            <span className="text-white">endpoint</span>
+            <span className="text-emerald-400">{"}"}{"`"}</span>
+            <span className="text-white">);</span>
+            {"\n\n"}
+            <span className="text-white/50">// Parse 402 Payment Required response</span>
+            {"\n"}
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> requirements = </span>
+            <span className="text-purple-400">await</span>
+            <span className="text-white"> response.json();</span>
+            {"\n"}
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> accept = requirements.accepts[</span>
+            <span className="text-orange-400">0</span>
+            <span className="text-white">];</span>
+            {"\n\n"}
+            <span className="text-white/50">// STEP 3: Pay via Yellow Network (Off-Chain, Instant!)</span>
+            {"\n"}
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> transactions = </span>
+            <span className="text-purple-400">await</span>
+            <span className="text-white"> yellowClient.transfer({"{"}</span>
+            {"\n"}
+            <span className="text-white">  destination: accept.payTo,</span>
+            {"\n"}
+            <span className="text-white">  asset: accept.asset,</span>
+            {"\n"}
+            <span className="text-white">  amount: accept.maxAmountRequired</span>
+            {"\n"}
+            <span className="text-white">{"}"});</span>
+            {"\n\n"}
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> tx = transactions[</span>
+            <span className="text-orange-400">0</span>
+            <span className="text-white">];</span>
+            {"\n"}
+            <span className="text-white">console.log(</span>
+            <span className="text-emerald-400">'✅ Payment sent!'</span>
+            <span className="text-white">);</span>
+            {"\n\n"}
+            <span className="text-white/50">// STEP 4: Build X-PAYMENT Header</span>
+            {"\n"}
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> paymentPayload = {"{"}</span>
+            {"\n"}
+            <span className="text-white">  scheme: </span>
+            <span className="text-emerald-400">'yellow'</span>
+            <span className="text-white">,</span>
+            {"\n"}
+            <span className="text-white">  payload: {"{"}</span>
+            {"\n"}
+            <span className="text-white">    transactionId: tx.id,</span>
+            {"\n"}
+            <span className="text-white">    fromAccount: tx.from_account,</span>
+            {"\n"}
+            <span className="text-white">    toAccount: tx.to_account,</span>
+            {"\n"}
+            <span className="text-white">    asset: tx.asset,</span>
+            {"\n"}
+            <span className="text-white">    amount: tx.amount</span>
+            {"\n"}
+            <span className="text-white">  {"}"}</span>
             {"\n"}
             <span className="text-white">{"};"}</span>
             {"\n\n"}
-            <span className="text-white/50">
-              // STEP 4: Execute Payment (bridge happens automatically)
-            </span>
-            {"\n"}
-            <span className="text-white">const result = await fetch(</span>
-            {"\n"}
-            <span className="text-white"> </span>
-            <span className="text-emerald-400">
-              {
-                "`https://www.apifortest.shop/api/endpoint?endpoint=${endpoint}`"
-              }
-            </span>
-            <span className="text-white">,</span>
-            {"\n"}
-            <span className="text-white"> {"{ "}method: </span>
-            <span className="text-emerald-400">'POST'</span>
-            <span className="text-white">, headers: {"{ "}</span>
-            <span className="text-orange-400 font-semibold">'X-Payment'</span>
-            <span className="text-white">
-              : btoa(JSON.stringify(x402Payload)) {"} }"}
-            </span>
-            {"\n"}
-            <span className="text-white">);</span>
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> xPaymentHeader = btoa(JSON.stringify(paymentPayload));</span>
             {"\n\n"}
-            <span className="text-white/50">
-              // STEP 5: Receive Protected Content
-            </span>
+            <span className="text-white/50">// STEP 5: Retry Request with Payment Proof</span>
             {"\n"}
-            <span className="text-white">
-              const content = await result.json();
-            </span>
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> paidResponse = </span>
+            <span className="text-purple-400">await</span>
+            <span className="text-white"> fetch(</span>
+            <span className="text-emerald-400">{"`"}http://localhost:4000${"{"}</span>
+            <span className="text-white">endpoint</span>
+            <span className="text-emerald-400">{"}"}{"`"}</span>
+            <span className="text-white">, {"{"}</span>
             {"\n"}
-            <span className="text-white">
-              const paymentProof = result.headers.get(
-            </span>
-            <span className="text-orange-400 font-semibold">
-              'X-Payment-Response'
-            </span>
-            <span className="text-white">);</span>
+            <span className="text-white">  headers: {"{ "}</span>
+            <span className="text-orange-400 font-semibold">'X-PAYMENT'</span>
+            <span className="text-white">: xPaymentHeader {" }"}</span>
+            {"\n"}
+            <span className="text-white">{"}"});</span>
+            {"\n\n"}
+            <span className="text-purple-400">const</span>
+            <span className="text-white"> data = </span>
+            <span className="text-purple-400">await</span>
+            <span className="text-white"> paidResponse.json();</span>
             {"\n"}
             <span className="text-white">console.log(</span>
-            <span className="text-emerald-400">'Access granted!'</span>
-            <span className="text-white">, content);</span>
+            <span className="text-emerald-400">'✅ Resource received:'</span>
+            <span className="text-white">, data);</span>
+            {"\n\n"}
+            <span className="text-white/50">
+              // That's it! Zero gas fees, instant settlement
+            </span>
           </pre>
         </div>
         {/* Scroll indicator */}
