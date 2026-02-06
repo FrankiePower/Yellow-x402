@@ -4,16 +4,21 @@ import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { createPublicClient, createWalletClient, custom, http, PublicClient, WalletClient, Chain } from "viem";
 import { sepolia } from "viem/chains";
 import { NitroliteClient, WalletStateSigner } from "@erc7824/nitrolite";
+import { YellowClient } from "@/lib/yellow-client";
+import type { Hex } from "viem";
 
 interface YellowNetworkContextType {
   isConnected: boolean;
   address: string | null;
   client: NitroliteClient | null;
+  yellowClient: YellowClient | null;
   publicClient: PublicClient | null;
   walletClient: WalletClient | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   chain: Chain;
+  isAuthenticating: boolean;
+  isAuthenticated: boolean;
 }
 
 export const YellowNetworkContext = createContext<YellowNetworkContextType | null>(null);
@@ -25,9 +30,11 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   const [client, setClient] = useState<NitroliteClient | null>(null);
+  const [yellowClient, setYellowClient] = useState<YellowClient | null>(null);
   const [publicClient, setPublicClient] = useState<PublicClient | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
-
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const connect = async () => {
     if (typeof window === "undefined" || !window.ethereum) {
@@ -36,6 +43,8 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
     }
 
     try {
+      setIsAuthenticating(true);
+
       // Connect Wallet
       const tempWalletClient = createWalletClient({
         chain: sepolia,
@@ -57,7 +66,7 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
       // Setup Public Client
       const _publicClient = createPublicClient({
         chain: sepolia,
-        transport: http(), // Default Viem public RPC or add specific one if needed
+        transport: http(),
       });
       setPublicClient(_publicClient);
 
@@ -75,19 +84,68 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
       });
 
       setClient(nitroliteClient);
+
+      // For Yellow ClearNode connection, we need a private key
+      // In production, use a secure key management solution
+      // For demo/testing, we'll use a stored key or prompt user
+      const storedKey = localStorage.getItem('yellow_demo_key');
+      let privateKey: Hex;
+
+      if (!storedKey) {
+        const userKey = prompt(
+          "Enter your Sepolia testnet private key for Yellow Network payments.\n" +
+          "(This is for DEMO purposes only. Use a testnet-only key!)\n" +
+          "Leave empty to generate a temporary key."
+        );
+
+        if (userKey && userKey.trim()) {
+          privateKey = userKey.trim().startsWith('0x')
+            ? userKey.trim() as Hex
+            : `0x${userKey.trim()}` as Hex;
+          // Optionally save for this session
+          localStorage.setItem('yellow_demo_key', privateKey);
+        } else {
+          // Generate ephemeral key for this session
+          const { generatePrivateKey } = await import('viem/accounts');
+          privateKey = generatePrivateKey();
+          console.log("Generated temporary key for this session");
+        }
+      } else {
+        privateKey = storedKey as Hex;
+      }
+
+      // Initialize Yellow Client for off-chain payments
+      const _yellowClient = new YellowClient(privateKey, {
+        appName: 'yellow-x402-frontend',
+        clearnetUrl: process.env.NEXT_PUBLIC_CLEARNET_URL || 'wss://clearnet-sandbox.yellow.com/ws'
+      });
+
+      // Connect and authenticate to ClearNode
+      await _yellowClient.connect();
+
+      setYellowClient(_yellowClient);
+      setIsAuthenticated(true);
       setIsConnected(true);
-      console.log("Connected to Yellow Network via Nitrolite");
+      console.log("✅ Connected to Yellow Network");
+      console.log("  Address:", _yellowClient.address);
 
     } catch (error) {
       console.error("Failed to connect:", error);
-      // alert("Failed to connect wallet");
+      alert(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
   const disconnect = () => {
+    if (yellowClient) {
+      yellowClient.close();
+    }
     setIsConnected(false);
+    setIsAuthenticated(false);
     setAddress(null);
     setClient(null);
+    setYellowClient(null);
     setWalletClient(null);
     setPublicClient(null);
   };
@@ -115,11 +173,14 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
         isConnected,
         address,
         client,
+        yellowClient,
         publicClient,
         walletClient,
         connect,
         disconnect,
-        chain: sepolia
+        chain: sepolia,
+        isAuthenticating,
+        isAuthenticated
       }}
     >
       {children}
