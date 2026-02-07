@@ -20,6 +20,7 @@
 
 import 'dotenv/config';
 import express, { Request, Response }  from 'express';
+import cors                            from 'cors';
 import { YellowClient, TransferTx }    from '../lib/yellow-client.js';
 
 // ── config ─────────────────────────────────────────────────
@@ -142,6 +143,7 @@ async function requirePayment(
 
 // ── Express app ────────────────────────────────────────────
 const app = express();
+app.use(cors());  // Enable CORS for frontend requests
 app.use(express.json());
 
 // Health (free)

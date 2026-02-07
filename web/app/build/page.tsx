@@ -5,6 +5,7 @@ import Footer from "../components/Footer";
 import HowItWorks from "./components/HowItWorks";
 import CodeExample from "./components/CodeExample";
 import YellowDemo from "./components/YellowDemo";
+import ChannelManagement from "./components/ChannelManagement";
 import Image from "next/image";
 
 export default function Build() {
@@ -39,7 +40,13 @@ export default function Build() {
           </section>
 
           <section className="max-w-5xl mx-auto">
-            <YellowDemo />
+            <h2 className="text-xs md:text-sm font-mono text-white/40 uppercase tracking-widest mb-4 md:mb-6 text-center">
+              Live Demo - Full State Channel Flow
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChannelManagement />
+              <YellowDemo />
+            </div>
           </section>
 
           <section className="flex flex-col items-center">

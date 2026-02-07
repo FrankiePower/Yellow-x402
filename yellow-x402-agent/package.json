@@ -8,12 +8,14 @@
   },
   "dependencies": {
     "@erc7824/nitrolite": "^0.5.3",
+    "cors":               "^2.8.5",
     "dotenv":             "^16.4.0",
     "express":            "^4.21.0",
     "viem":               "^2.0.0",
     "ws":                 "^8.18.0"
   },
   "devDependencies": {
+    "@types/cors":    "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node":    "^22.0.0",
     "@types/ws":      "^8.5.13",

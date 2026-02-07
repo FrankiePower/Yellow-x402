@@ -44,6 +44,30 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
     try {
       setIsAuthenticating(true);
 
+      // Switch to Sepolia network
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0xaa36a7' }], // Sepolia chainId in hex
+        });
+      } catch (switchError: any) {
+        // If Sepolia is not added, add it
+        if (switchError.code === 4902) {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0xaa36a7',
+              chainName: 'Sepolia',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://rpc.sepolia.org'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io'],
+            }],
+          });
+        } else {
+          throw switchError;
+        }
+      }
+
       // Connect Wallet
       const tempWalletClient = createWalletClient({
         chain: sepolia,
