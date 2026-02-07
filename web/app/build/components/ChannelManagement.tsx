@@ -15,12 +15,16 @@ export default function ChannelManagement() {
     channelId,
     status,
     createTxHash,
+    resizeTxHash,
     closeTxHash,
+    ledgerBalance,
     error,
     isLoading,
+    tokenAddress,
     createChannel,
     closeChannel,
     reset,
+    refreshLedgerBalance,
   } = useChannel();
 
   if (!isAuthenticated) {
@@ -38,7 +42,7 @@ export default function ChannelManagement() {
   const handleCreate = async () => {
     try {
       const result = await createChannel();
-      if (result.alreadyExists) {
+      if (result?.alreadyExists) {
         console.log("Using existing channel:", result.channelId);
       }
     } catch (err) {
@@ -70,8 +74,10 @@ export default function ChannelManagement() {
       const data = await response.json();
 
       if (response.ok) {
-        setFaucetStatus("Tokens requested! Wait ~30s for confirmation.");
+        setFaucetStatus("Tokens requested! Wait ~30s, then refresh balance.");
         console.log("Faucet response:", data);
+        // Auto-refresh balance after delay
+        setTimeout(() => refreshLedgerBalance(), 35000);
       } else {
         setFaucetStatus(`Error: ${data.error || data.message || "Unknown error"}`);
       }
@@ -82,30 +88,61 @@ export default function ChannelManagement() {
     }
   };
 
+  const getStatusColor = () => {
+    switch (status) {
+      case "none": return "bg-white/30";
+      case "creating": return "bg-yellow-400 animate-pulse";
+      case "funding": return "bg-orange-400 animate-pulse";
+      case "open": return "bg-green-400";
+      case "closing": return "bg-yellow-400 animate-pulse";
+      case "closed": return "bg-blue-400";
+      default: return "bg-red-400";
+    }
+  };
+
+  const getStatusLabel = () => {
+    switch (status) {
+      case "creating": return "Creating...";
+      case "funding": return "Funding...";
+      case "closing": return "Settling...";
+      default: return status;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-xs font-mono text-white/60 uppercase tracking-wider text-center mb-6">
-        State Channels (Advanced)
+        On-Chain State Channels
       </h3>
 
-      <div className="bg-green-500/10 border border-green-500/30 p-3 mb-4">
-        <p className="text-xs font-mono text-green-400">
-          The off-chain payments (right panel) work now! State channels below are for on-chain settlement.
-        </p>
-      </div>
-
       <div className="bg-white/5 border border-white/10 p-6 space-y-6">
+        {/* Ledger Balance (Off-Chain) */}
+        <div className="bg-black/50 border border-white/10 p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-mono text-white/60 mb-1">Off-Chain Balance (Unified Ledger)</div>
+              <div className="text-lg font-mono text-white">
+                {ledgerBalance ? `${(Number(ledgerBalance) / 1_000_000).toFixed(2)} ytest.usd` : "—"}
+              </div>
+            </div>
+            <button
+              onClick={refreshLedgerBalance}
+              className="text-xs font-mono text-white/40 hover:text-white/60"
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="text-xs font-mono text-white/30 mt-2">
+            This balance comes from the faucet and can be allocated to channels.
+          </p>
+        </div>
+
         {/* Status Indicator */}
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono text-white/60 uppercase">Channel Status</span>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              status === "none" ? "bg-white/30" :
-              status === "creating" || status === "closing" ? "bg-yellow-400 animate-pulse" :
-              status === "open" ? "bg-green-400" :
-              status === "closed" ? "bg-blue-400" : "bg-red-400"
-            }`} />
-            <span className="text-sm font-mono text-white capitalize">{status}</span>
+            <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+            <span className="text-sm font-mono text-white capitalize">{getStatusLabel()}</span>
           </div>
         </div>
 
@@ -122,9 +159,9 @@ export default function ChannelManagement() {
           {/* Create Channel */}
           <button
             onClick={handleCreate}
-            disabled={isLoading || status === "open" || status === "creating"}
+            disabled={isLoading || status === "open" || status === "creating" || status === "funding" || !tokenAddress}
             className={`px-4 py-3 font-mono text-sm uppercase tracking-wider transition-all
-              ${status === "none"
+              ${status === "none" && tokenAddress
                 ? "bg-[#FCD535] text-black hover:bg-[#FCD535]/90"
                 : "bg-white/10 text-white/40 cursor-not-allowed"}
               disabled:opacity-50`}
@@ -134,8 +171,15 @@ export default function ChannelManagement() {
                 <div className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                 Creating...
               </span>
+            ) : status === "funding" ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                Funding...
+              </span>
+            ) : !tokenAddress ? (
+              "Loading..."
             ) : (
-              "① Create Channel"
+              "① Create & Fund"
             )}
           </button>
 
@@ -155,13 +199,13 @@ export default function ChannelManagement() {
                 Settling...
               </span>
             ) : (
-              "③ Close & Settle"
+              "② Close & Settle"
             )}
           </button>
         </div>
 
         {/* Transaction Links */}
-        {(createTxHash || closeTxHash) && (
+        {(createTxHash || resizeTxHash || closeTxHash) && (
           <div className="space-y-2">
             <div className="text-xs font-mono text-white/60 uppercase">On-Chain Transactions</div>
             <div className="bg-black/50 border border-white/10 p-3 space-y-2">
@@ -174,7 +218,20 @@ export default function ChannelManagement() {
                     rel="noopener noreferrer"
                     className="text-xs font-mono text-[#FCD535] hover:underline"
                   >
-                    View on Etherscan →
+                    View on Etherscan
+                  </a>
+                </div>
+              )}
+              {resizeTxHash && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-white/60">Fund Channel:</span>
+                  <a
+                    href={`${SEPOLIA_EXPLORER}${resizeTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono text-[#FCD535] hover:underline"
+                  >
+                    View on Etherscan
                   </a>
                 </div>
               )}
@@ -187,7 +244,7 @@ export default function ChannelManagement() {
                     rel="noopener noreferrer"
                     className="text-xs font-mono text-[#FCD535] hover:underline"
                   >
-                    View on Etherscan →
+                    View on Etherscan
                   </a>
                 </div>
               )}
@@ -242,14 +299,12 @@ export default function ChannelManagement() {
 
         {/* Info */}
         <div className="text-xs font-mono text-white/40 space-y-1 pt-2 border-t border-white/10">
-          <p className="text-white/60 font-bold mb-2">Off-Chain (Already Working!):</p>
-          <p>• Instant transfers via Yellow ledger</p>
-          <p>• Zero gas fees per transfer</p>
-          <p className="text-white/60 font-bold mt-3 mb-2">On-Chain Channels (Advanced):</p>
-          <p>① Create Channel — Lock funds on-chain</p>
-          <p>② Make payments — Off-chain, instant</p>
-          <p>③ Close & Settle — Final state on-chain</p>
-          <p className="mt-2 text-white/30">Requires custody deposit. Use faucet first.</p>
+          <p className="text-white/60 font-bold mb-2">Full State Channel Flow:</p>
+          <p>① Request faucet tokens (lands in Off-Chain Balance)</p>
+          <p>② Create & Fund channel (2 L1 transactions)</p>
+          <p>③ Make off-chain payments (instant, gasless)</p>
+          <p>④ Close & Settle (1 L1 transaction)</p>
+          <p className="mt-2 text-white/30">Token: {tokenAddress ? `${tokenAddress.slice(0, 10)}...` : "Loading..."}</p>
         </div>
       </div>
     </div>

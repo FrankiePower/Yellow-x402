@@ -26,6 +26,8 @@ import {
   createCreateChannelMessage,
   createCloseChannelMessage,
   createGetConfigMessage,
+  createResizeChannelMessage,
+  createGetLedgerBalancesMessage,
 } from '@erc7824/nitrolite';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import type { Address, WalletClient } from 'viem';
@@ -215,6 +217,47 @@ export class YellowClient extends EventEmitter {
     const msg = await createGetConfigMessage(this.sessionSigner);
     this.ws.send(msg);
     return this.waitFor('assets'); // first response; "get_config" follows but has no asset list
+  }
+
+  /**
+   * Resize (fund) a state channel by moving funds from Unified Balance.
+   * Uses allocate_amount to pull from off-chain ledger balance (from faucet).
+   */
+  async resizeChannel(params: {
+    channel_id: string;
+    allocate_amount: bigint;
+  }): Promise<{
+    channel_id: string;
+    state: ChannelInfo['state'];
+    server_signature: string;
+  }> {
+    if (!this._authenticated)
+      throw new Error('[YellowClient] not authenticated');
+    const msg = await createResizeChannelMessage(this.sessionSigner, {
+      channel_id: params.channel_id as `0x${string}`,
+      allocate_amount: params.allocate_amount,
+      funds_destination: this.address,
+    });
+    this.ws.send(msg);
+    return this.waitFor('resize_channel');
+  }
+
+  /**
+   * Get ledger balances (off-chain Unified Balance).
+   * This shows funds available from faucet that can be allocated to channels.
+   */
+  async getLedgerBalances(): Promise<{
+    balances: Array<{ asset: string; amount: string }>;
+  }> {
+    if (!this._authenticated)
+      throw new Error('[YellowClient] not authenticated');
+    const msg = await createGetLedgerBalancesMessage(
+      this.sessionSigner,
+      this.address,
+      Date.now()
+    );
+    this.ws.send(msg);
+    return this.waitFor('ledger_balances');
   }
 
   close() {
