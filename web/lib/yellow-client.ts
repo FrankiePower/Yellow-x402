@@ -2,14 +2,16 @@
  * yellow-client.ts (Browser version)
  *
  * Reusable ClearNode WebSocket client for browser environments.
- *   - Authenticates via EIP-712 challenge/verify
+ *   - Authenticates via EIP-712 challenge/verify (user signs in MetaMask)
+ *   - Uses ephemeral session key for transfers (no popup per transfer)
  *   - Exposes transfer() to send funds via the ClearNode ledger
  *   - Emits "tr" events when an incoming transfer notification arrives
  *
  * Usage:
- *   const client = new YellowClient('0x…privateKey', { appName: 'my-app' });
- *   await client.connect();
- *   const txs = await client.transfer({ … });
+ *   const walletClient = createWalletClient({ chain, transport: custom(window.ethereum), account });
+ *   const client = new YellowClient(walletClient, { appName: 'my-app' });
+ *   await client.connect();  // User signs EIP-712 auth in MetaMask
+ *   const txs = await client.transfer({ … });  // No popup - uses session key
  *   client.on('tr', (payload) => { … });
  *   client.close();
  */
@@ -26,9 +28,7 @@ import {
   createGetConfigMessage,
 } from '@erc7824/nitrolite';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { createWalletClient, http } from 'viem';
-import { sepolia } from 'viem/chains';
-import type { Address, Hex } from 'viem';
+import type { Address, WalletClient } from 'viem';
 
 // ── public types ───────────────────────────────────────────
 
@@ -89,8 +89,7 @@ const CLEARNET_DEFAULT = 'wss://clearnet-sandbox.yellow.com/ws';
 export class YellowClient extends EventEmitter {
   // ── private state ────────────────────────────────────────
   private ws!: WebSocket;
-  private readonly account: ReturnType<typeof privateKeyToAccount>;
-  private readonly walletClient: ReturnType<typeof createWalletClient>;
+  private readonly walletClient: WalletClient;
   private sessionSigner!: ReturnType<typeof createECDSAMessageSigner>;
   private sessionAddress!: Address;
   private authPartial!: Record<string, unknown>; // persisted for challenge signing
@@ -99,18 +98,16 @@ export class YellowClient extends EventEmitter {
 
   // ── ctor ─────────────────────────────────────────────────
   constructor(
-    privateKey: Hex,
+    walletClient: WalletClient,
     private readonly opts: { appName?: string; clearnetUrl?: string } = {}
   ) {
     super();
     this.debug = false; // Can be set via opts if needed
-    this.account = privateKeyToAccount(privateKey);
-    // Signing is fully local — transport URL is irrelevant.
-    this.walletClient = createWalletClient({
-      chain: sepolia,
-      transport: http(),
-      account: this.account,
-    });
+    if (!walletClient.account) {
+      throw new Error('[YellowClient] walletClient must have an account');
+    }
+    this.walletClient = walletClient;
+    // Generate ephemeral session key for signing transfers (no MetaMask popup needed)
     const sessionPk = generatePrivateKey();
     this.sessionAddress = privateKeyToAccount(sessionPk).address;
     this.sessionSigner = createECDSAMessageSigner(sessionPk);
@@ -118,7 +115,7 @@ export class YellowClient extends EventEmitter {
 
   // ── public ───────────────────────────────────────────────
   get address(): Address {
-    return this.account.address;
+    return this.walletClient.account!.address;
   }
   get isAuth(): boolean {
     return this._authenticated;
@@ -292,7 +289,7 @@ export class YellowClient extends EventEmitter {
     };
 
     const msg = await createAuthRequestMessage({
-      address: this.account.address,
+      address: this.walletClient.account!.address,
       application: this.appName,
       ...this.authPartial,
     } as any);

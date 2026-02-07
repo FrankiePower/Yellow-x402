@@ -5,7 +5,6 @@ import { createPublicClient, createWalletClient, custom, http, PublicClient, Wal
 import { sepolia } from "viem/chains";
 import { NitroliteClient, WalletStateSigner } from "@erc7824/nitrolite";
 import { YellowClient } from "@/lib/yellow-client";
-import type { Hex } from "viem";
 
 interface YellowNetworkContextType {
   isConnected: boolean;
@@ -85,37 +84,9 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
 
       setClient(nitroliteClient);
 
-      // For Yellow ClearNode connection, we need a private key
-      // In production, use a secure key management solution
-      // For demo/testing, we'll use a stored key or prompt user
-      const storedKey = localStorage.getItem('yellow_demo_key');
-      let privateKey: Hex;
-
-      if (!storedKey) {
-        const userKey = prompt(
-          "Enter your Sepolia testnet private key for Yellow Network payments.\n" +
-          "(This is for DEMO purposes only. Use a testnet-only key!)\n" +
-          "Leave empty to generate a temporary key."
-        );
-
-        if (userKey && userKey.trim()) {
-          privateKey = userKey.trim().startsWith('0x')
-            ? userKey.trim() as Hex
-            : `0x${userKey.trim()}` as Hex;
-          // Optionally save for this session
-          localStorage.setItem('yellow_demo_key', privateKey);
-        } else {
-          // Generate ephemeral key for this session
-          const { generatePrivateKey } = await import('viem/accounts');
-          privateKey = generatePrivateKey();
-          console.log("Generated temporary key for this session");
-        }
-      } else {
-        privateKey = storedKey as Hex;
-      }
-
-      // Initialize Yellow Client for off-chain payments
-      const _yellowClient = new YellowClient(privateKey, {
+      // Initialize Yellow Client using the connected wallet
+      // User will sign the auth challenge via MetaMask
+      const _yellowClient = new YellowClient(_walletClient, {
         appName: 'yellow-x402-frontend',
         clearnetUrl: process.env.NEXT_PUBLIC_CLEARNET_URL || 'wss://clearnet-sandbox.yellow.com/ws'
       });
