@@ -17,14 +17,11 @@ export default function ChannelManagement() {
     createTxHash,
     resizeTxHash,
     closeTxHash,
-    ledgerBalance,
     error,
     isLoading,
-    tokenAddress,
     createChannel,
     closeChannel,
     reset,
-    refreshLedgerBalance,
   } = useChannel();
 
   if (!isAuthenticated) {
@@ -74,10 +71,8 @@ export default function ChannelManagement() {
       const data = await response.json();
 
       if (response.ok) {
-        setFaucetStatus("Tokens requested! Wait ~30s, then refresh balance.");
+        setFaucetStatus("Tokens requested! Wait ~30s for them to arrive.");
         console.log("Faucet response:", data);
-        // Auto-refresh balance after delay
-        setTimeout(() => refreshLedgerBalance(), 35000);
       } else {
         setFaucetStatus(`Error: ${data.error || data.message || "Unknown error"}`);
       }
@@ -116,27 +111,6 @@ export default function ChannelManagement() {
       </h3>
 
       <div className="bg-white/5 border border-white/10 p-6 space-y-6">
-        {/* Ledger Balance (Off-Chain) */}
-        <div className="bg-black/50 border border-white/10 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-mono text-white/60 mb-1">Off-Chain Balance (Unified Ledger)</div>
-              <div className="text-lg font-mono text-white">
-                {ledgerBalance ? `${(Number(ledgerBalance) / 1_000_000).toFixed(2)} ytest.usd` : "—"}
-              </div>
-            </div>
-            <button
-              onClick={refreshLedgerBalance}
-              className="text-xs font-mono text-white/40 hover:text-white/60"
-            >
-              Refresh
-            </button>
-          </div>
-          <p className="text-xs font-mono text-white/30 mt-2">
-            This balance comes from the faucet and can be allocated to channels.
-          </p>
-        </div>
-
         {/* Status Indicator */}
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono text-white/60 uppercase">Channel Status</span>
@@ -156,12 +130,11 @@ export default function ChannelManagement() {
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Create Channel */}
           <button
             onClick={handleCreate}
-            disabled={isLoading || status === "open" || status === "creating" || status === "funding" || !tokenAddress}
+            disabled={isLoading || status === "open" || status === "creating" || status === "funding"}
             className={`px-4 py-3 font-mono text-sm uppercase tracking-wider transition-all
-              ${status === "none" && tokenAddress
+              ${status === "none"
                 ? "bg-[#FCD535] text-black hover:bg-[#FCD535]/90"
                 : "bg-white/10 text-white/40 cursor-not-allowed"}
               disabled:opacity-50`}
@@ -176,14 +149,11 @@ export default function ChannelManagement() {
                 <div className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                 Funding...
               </span>
-            ) : !tokenAddress ? (
-              "Loading..."
             ) : (
               "① Create & Fund"
             )}
           </button>
 
-          {/* Close Channel */}
           <button
             onClick={handleClose}
             disabled={isLoading || status !== "open"}
@@ -299,12 +269,11 @@ export default function ChannelManagement() {
 
         {/* Info */}
         <div className="text-xs font-mono text-white/40 space-y-1 pt-2 border-t border-white/10">
-          <p className="text-white/60 font-bold mb-2">Full State Channel Flow:</p>
-          <p>① Request faucet tokens (lands in Off-Chain Balance)</p>
-          <p>② Create & Fund channel (2 L1 transactions)</p>
-          <p>③ Make off-chain payments (instant, gasless)</p>
-          <p>④ Close & Settle (1 L1 transaction)</p>
-          <p className="mt-2 text-white/30">Token: {tokenAddress ? `${tokenAddress.slice(0, 10)}...` : "Loading..."}</p>
+          <p className="text-white/60 font-bold mb-2">State Channel Flow:</p>
+          <p>① Request faucet tokens first</p>
+          <p>② Create & Fund channel (2 L1 txs)</p>
+          <p>③ Off-chain payments (instant, gasless)</p>
+          <p>④ Close & Settle (1 L1 tx)</p>
         </div>
       </div>
     </div>

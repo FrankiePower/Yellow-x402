@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useYellow } from "@/hooks/useYellow";
 import type { ChannelInfo } from "@/lib/yellow-client";
 
@@ -11,15 +11,16 @@ export interface ChannelState {
   resizeTxHash: string | null;
   closeTxHash: string | null;
   channelInfo: ChannelInfo | null;
-  ledgerBalance: string | null;
   error: string | null;
 }
 
 const CHAIN_ID = 11155111; // Sepolia
 const FUND_AMOUNT = 20n; // Amount to allocate from Unified Balance to channel
+// ytest.usd token on Yellow sandbox
+const YTEST_USD_TOKEN = "0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb";
 
 export function useChannel() {
-  const { yellowClient, client, publicClient, isAuthenticated, address } = useYellow();
+  const { yellowClient, client, publicClient, isAuthenticated } = useYellow();
 
   const [state, setState] = useState<ChannelState>({
     channelId: null,
@@ -28,73 +29,24 @@ export function useChannel() {
     resizeTxHash: null,
     closeTxHash: null,
     channelInfo: null,
-    ledgerBalance: null,
     error: null,
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [tokenAddress, setTokenAddress] = useState<string | null>(null);
-
-  // Fetch config to get correct token address
-  useEffect(() => {
-    if (!yellowClient || !isAuthenticated) return;
-
-    const fetchConfig = async () => {
-      try {
-        console.log("[useChannel] Fetching config for token address...");
-        const config = await yellowClient.getConfig();
-        const asset = config.assets?.find(
-          (a: any) => (a.chain_id ?? a.chainId) === CHAIN_ID
-        );
-        if (asset) {
-          console.log("[useChannel] Found token:", asset.token);
-          setTokenAddress(asset.token);
-        } else {
-          // Fallback to known sandbox token
-          console.log("[useChannel] Using fallback token address");
-          setTokenAddress("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
-        }
-      } catch (err) {
-        console.warn("[useChannel] Config fetch failed, using fallback:", err);
-        setTokenAddress("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
-      }
-    };
-
-    fetchConfig();
-  }, [yellowClient, isAuthenticated]);
-
-  // Fetch ledger balance
-  const refreshLedgerBalance = useCallback(async () => {
-    if (!yellowClient || !isAuthenticated) return;
-    try {
-      const result = await yellowClient.getLedgerBalances();
-      const ytestBal = result.balances?.find((b: any) =>
-        b.asset === "ytest.usd" || b.asset?.includes("ytest")
-      );
-      if (ytestBal) {
-        setState(prev => ({ ...prev, ledgerBalance: ytestBal.amount }));
-      }
-    } catch (err) {
-      console.warn("[useChannel] Failed to fetch ledger balance:", err);
-    }
-  }, [yellowClient, isAuthenticated]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      refreshLedgerBalance();
-    }
-  }, [isAuthenticated, refreshLedgerBalance]);
+  const tokenAddress = YTEST_USD_TOKEN;
 
   /**
-   * Full channel lifecycle:
+   * Full channel lifecycle matching yellow-app reference:
    * 1. Create channel via ClearNode
    * 2. Submit to blockchain
-   * 3. Resize (fund) channel with allocate_amount
-   * 4. Submit resize to blockchain
+   * 3. Wait 5s for node to index
+   * 4. Resize (fund) channel with allocate_amount
+   * 5. Get proofStates from getChannelData
+   * 6. Submit resize to blockchain
    */
   const createChannel = useCallback(async () => {
-    if (!yellowClient || !client || !publicClient || !isAuthenticated || !tokenAddress) {
-      throw new Error("Not connected to Yellow Network or token not loaded");
+    if (!yellowClient || !client || !publicClient || !isAuthenticated) {
+      throw new Error("Not connected to Yellow Network");
     }
 
     setIsLoading(true);
@@ -134,16 +86,17 @@ export function useChannel() {
       setState(prev => ({ ...prev, createTxHash, channelId: channelResp.channel_id }));
 
       // Wait for confirmation
-      console.log("[useChannel] Waiting for create confirmation...");
+      console.log("[useChannel] Waiting for confirmation...");
       await publicClient.waitForTransactionReceipt({ hash: createTxHash });
       console.log("[useChannel] Channel created on-chain!");
 
-      // Step 3: Wait for node to index, then resize (fund) channel
+      // Step 3: Wait 5s for node to index (matching reference project)
       setState(prev => ({ ...prev, status: "funding" }));
-      console.log("[useChannel] Waiting 3s for node to index channel...");
-      await new Promise(r => setTimeout(r, 3000));
+      console.log("[useChannel] Waiting 5s for node to index channel...");
+      await new Promise(r => setTimeout(r, 5000));
 
-      console.log("[useChannel] Requesting resize (funding) from ClearNode...");
+      // Step 4: Request resize from ClearNode
+      console.log("[useChannel] Requesting resize from ClearNode...");
       console.log("[useChannel] Allocating", FUND_AMOUNT.toString(), "from Unified Balance");
 
       const resizeResp = await yellowClient.resizeChannel({
@@ -153,7 +106,20 @@ export function useChannel() {
 
       console.log("[useChannel] Resize response received");
 
-      // Step 4: Submit resize to blockchain
+      // Step 5: Get proofStates from on-chain data (like reference project)
+      let proofStates: any[] = [];
+      try {
+        console.log("[useChannel] Getting on-chain channel data for proofStates...");
+        const onChainData = await client.getChannelData(channelResp.channel_id as `0x${string}`);
+        if (onChainData.lastValidState) {
+          proofStates = [onChainData.lastValidState];
+          console.log("[useChannel] Got proofStates from on-chain data");
+        }
+      } catch (e) {
+        console.log("[useChannel] Could not fetch on-chain data (may be new channel):", e);
+      }
+
+      // Step 6: Submit resize to blockchain
       console.log("[useChannel] Submitting resize to blockchain...");
       const { txHash: resizeTxHash } = await client.resizeChannel({
         resizeState: {
@@ -168,7 +134,7 @@ export function useChannel() {
           channelId: resizeResp.channel_id as `0x${string}`,
           serverSignature: resizeResp.server_signature as `0x${string}`,
         },
-        proofStates: [],
+        proofStates,
       });
 
       console.log("[useChannel] Resize tx submitted:", resizeTxHash);
@@ -184,23 +150,33 @@ export function useChannel() {
         status: "open",
       }));
 
-      // Refresh ledger balance
-      await refreshLedgerBalance();
-
       return { channelId: channelResp.channel_id, createTxHash, resizeTxHash };
     } catch (err: any) {
       console.error("[useChannel] Create error:", err);
 
       // Check if channel already exists
-      const match = err.message?.match(/(0x[0-9a-fA-F]{64})/);
-      if (match && err.message.includes("already exists")) {
+      // Error might be a stringified JSON like {"error":"an open channel ... 0x..."}
+      let errorMsg = err.message;
+      if (typeof err === 'object' && err.error) {
+          errorMsg = JSON.stringify(err.error);
+      }
+      
+      const match = errorMsg?.match(/0x[a-fA-F0-9]{64}/);
+      if (match && (errorMsg.includes("already exists") || errorMsg.includes("open channel"))) {
+        console.log("[useChannel] Found existing channel:", match[0]);
         setState(prev => ({
           ...prev,
-          channelId: match[1],
+          channelId: match[0],
           status: "open",
           error: null,
+          channelInfo: { 
+            channel_id: match[0], 
+            // We don't have the full info, but enough to proceed
+            state: { intent: 0, version: 0, state_data: "0x", allocations: [] }, 
+            server_signature: "0x" 
+          }
         }));
-        return { channelId: match[1], createTxHash: null, alreadyExists: true };
+        return { channelId: match[0], createTxHash: null, alreadyExists: true };
       }
 
       setState(prev => ({ ...prev, status: "none", error: err.message }));
@@ -208,12 +184,10 @@ export function useChannel() {
     } finally {
       setIsLoading(false);
     }
-  }, [yellowClient, client, publicClient, isAuthenticated, tokenAddress, refreshLedgerBalance]);
+  }, [yellowClient, client, publicClient, isAuthenticated, tokenAddress]);
 
   /**
    * Close channel and settle on-chain
-   * - Requests final state from ClearNode
-   * - Submits to blockchain via NitroliteClient
    */
   const closeChannel = useCallback(async () => {
     if (!yellowClient || !client || !publicClient || !state.channelId) {
@@ -256,14 +230,10 @@ export function useChannel() {
       setState(prev => ({ ...prev, closeTxHash: txHash }));
 
       // Wait for confirmation
-      console.log("[useChannel] Waiting for confirmation...");
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       console.log("[useChannel] Channel closed and settled on-chain!");
       setState(prev => ({ ...prev, status: "closed" }));
-
-      // Refresh ledger balance
-      await refreshLedgerBalance();
 
       return { txHash };
     } catch (err: any) {
@@ -273,7 +243,7 @@ export function useChannel() {
     } finally {
       setIsLoading(false);
     }
-  }, [yellowClient, client, publicClient, state.channelId, refreshLedgerBalance]);
+  }, [yellowClient, client, publicClient, state.channelId]);
 
   const reset = useCallback(() => {
     setState({
@@ -283,7 +253,6 @@ export function useChannel() {
       resizeTxHash: null,
       closeTxHash: null,
       channelInfo: null,
-      ledgerBalance: null,
       error: null,
     });
   }, []);
@@ -295,6 +264,5 @@ export function useChannel() {
     createChannel,
     closeChannel,
     reset,
-    refreshLedgerBalance,
   };
 }

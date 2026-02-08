@@ -145,22 +145,7 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
     setPublicClient(null);
   };
 
-  // Auto-connect on mount
-  useEffect(() => {
-    const checkConnection = async () => {
-      if (typeof window !== "undefined" && window.ethereum) {
-        try {
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          if (accounts && accounts.length > 0) {
-            connect();
-          }
-        } catch (err) {
-          console.error("Error checking connection:", err);
-        }
-      }
-    };
-    checkConnection();
-  }, []);
+
 
   return (
     <YellowNetworkContext.Provider
