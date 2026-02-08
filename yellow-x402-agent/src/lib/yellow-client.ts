@@ -191,7 +191,9 @@ export class YellowClient extends EventEmitter {
 
   /**
    * Resize (fund) a state channel by moving funds from Unified Balance.
-   * Uses allocate_amount to pull from off-chain ledger balance (from faucet).
+   * Uses allocate_amount (negative value) to pull from off-chain ledger balance.
+   * 
+   * @param allocate_amount - Negative value moves Unified → Channel, positive moves Channel → Unified
    */
   async resizeChannel(params: {
     channel_id: string;
@@ -205,7 +207,7 @@ export class YellowClient extends EventEmitter {
       throw new Error('[YellowClient] not authenticated');
     const msg = await createResizeChannelMessage(this.sessionSigner, {
       channel_id: params.channel_id as `0x${string}`,
-      resize_amount: params.allocate_amount, // Use resize_amount to Fund (Unified -> Channel)
+      allocate_amount: params.allocate_amount, // Negative = Unified → Channel
       funds_destination: this.address,
     });
     this.ws.send(msg);

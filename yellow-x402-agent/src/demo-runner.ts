@@ -8,7 +8,10 @@
 import { YellowClient } from './lib/yellow-client.js';
 
 const SERVICE_URL = process.env.SERVICE_URL || 'http://localhost:4000';
-const ENDPOINTS = ['/resource', '/data', '/quote'];
+
+// Repeat endpoints to support 100 payments
+const BASE_ENDPOINTS = ['/resource', '/data', '/quote'];
+const ENDPOINTS = Array(34).fill(BASE_ENDPOINTS).flat(); // 34*3 = 102 endpoints
 
 export interface DemoLogEntry {
   timestamp: string;
@@ -155,6 +158,7 @@ export async function runDemo(buyerPrivateKey: string): Promise<DemoResult> {
 
     // Get ledger balances
     const { balances } = await yellow.getLedgerBalances();
+    const initialBalance = balances.find(b => b.asset === 'ytest.usd');
     logs.push({
       timestamp: new Date().toISOString(),
       level: 'info',
@@ -162,21 +166,126 @@ export async function runDemo(buyerPrivateKey: string): Promise<DemoResult> {
       data: { balances },
     });
 
+    // Check if we have enough funds for 100 payments
+    // Each payment costs: /resource=10000, /data=5000, /quote=2000 = 17,000 per cycle
+    // 100 payments / 3 endpoints = ~34 cycles = 578,000 units minimum
+    const requiredBalance = 600000; // 0.6 USDC minimum
+    const currentBalance = initialBalance ? parseFloat(initialBalance.amount) : 0;
+    
+    if (currentBalance < requiredBalance) {
+      logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        message: `Insufficient balance: ${currentBalance} units (need ${requiredBalance})`,
+        data: { 
+          current: currentBalance, 
+          required: requiredBalance,
+          note: 'Need more Faucet funds or reduce payment count.'
+        },
+      });
+      
+      return {
+        success: false,
+        logs,
+        error: `Insufficient balance for 100 payments. Current: ${currentBalance}, Required: ${requiredBalance}`,
+      };
+    }
+
+    // Create channel and allocate funds from Unified Balance
+    logs.push({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: 'Creating payment channel...',
+    });
+
+    try {
+      const serviceAddress = '0xbF08D2f042C80d59Fa8F2A9e84B1EEFE295FCdDE'; // Service address
+      const channel = await yellow.createChannel({
+        chain_id: 11155111, // Sepolia
+        token: '0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb', // ytest.usd token address
+      });
+
+      logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'success',
+        message: `Channel created: ${channel.channel_id}`,
+        data: { channelId: channel.channel_id },
+      });
+
+      // Allocate funds from Unified Balance to Channel
+      // Negative allocate_amount moves funds: Unified → Channel
+      const allocateAmount = -600000n; // Allocate 0.6 USDC to channel
+      
+      logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: `Allocating ${Math.abs(Number(allocateAmount))} units from Unified Balance to channel...`,
+      });
+
+      await yellow.resizeChannel({
+        channel_id: channel.channel_id,
+        allocate_amount: allocateAmount,
+      });
+
+      logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'success',
+        message: 'Channel funded successfully! Ready for 100 payments.',
+      });
+    } catch (error: any) {
+      logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        message: `Channel setup failed: ${error.message}`,
+      });
+      
+      // Fall back to Unified Balance payments
+      logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'Falling back to Unified Balance payments...',
+      });
+    }
+
     // Make paid requests
     logs.push({
       timestamp: new Date().toISOString(),
       level: 'info',
-      message: 'Making paid requests...',
+      message: `Making 100 paid requests (balance: ${currentBalance} units)...`,
     });
 
-    for (const endpoint of ENDPOINTS) {
-      await doPaidRequest(yellow, endpoint, logs);
+    let successCount = 0;
+    let failCount = 0;
+    const totalPayments = 100;
+
+    for (let i = 0; i < totalPayments; i++) {
+      const endpoint = ENDPOINTS[i % ENDPOINTS.length];
+      try {
+        await doPaidRequest(yellow, endpoint, logs);
+        successCount++;
+        
+        // Log progress every 10 payments
+        if ((i + 1) % 10 === 0) {
+          logs.push({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: `Progress: ${i + 1}/${totalPayments} payments completed`,
+          });
+        }
+      } catch (error: any) {
+        failCount++;
+        logs.push({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          message: `Payment ${i + 1} failed: ${error.message}`,
+        });
+      }
     }
 
     logs.push({
       timestamp: new Date().toISOString(),
       level: 'success',
-      message: 'Demo completed successfully! ✅',
+      message: `Demo completed! ✅ ${successCount} successful, ${failCount} failed`,
     });
 
     yellow.close();

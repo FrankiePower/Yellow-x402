@@ -74,7 +74,7 @@ export default function YellowDemo() {
               <span>Running Demo...</span>
             </>
           ) : (
-            <span>Run Full Demo (3 Payments)</span>
+            <span>Run Full Demo (100 Payments + Channels)</span>
           )}
         </button>
 
@@ -126,8 +126,9 @@ export default function YellowDemo() {
 
         {/* Info */}
         <div className="text-xs font-mono text-white/40 space-y-1">
-          <p>💡 Demo executes 3 paid API calls with instant off-chain payments</p>
-          <p>⚡ All payments settle in milliseconds with zero gas fees</p>
+          <p>💡 Demo executes 100 paid API calls using state channels</p>
+          <p>⚡ Payments settle in milliseconds with zero gas fees</p>
+          <p>🔗 Demonstrates ERC-7824 Nitrolite state channel technology</p>
           {yellowClient && (
             <p>🔑 Your Yellow address: {yellowClient.address}</p>
           )}
