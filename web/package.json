@@ -11,7 +11,7 @@
   "dependencies": {
     "@erc7824/nitrolite": "^0.5.3",
     "@swc/helpers": "^0.5.18",
-    "next": "15.1.0",
+    "next": "15.1.11",
     "porto": "^0.2.37",
     "react": "^18",
     "react-dom": "^18",
