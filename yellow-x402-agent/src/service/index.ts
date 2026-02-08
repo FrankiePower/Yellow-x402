@@ -281,6 +281,15 @@ async function main() {
 
   // "tr" = RPCMethod.TransferNotification (confirmed from SDK enum)
   yellow.on('tr', (payload: any) => {
+    console.log('[service] GOT tr EVENT:', JSON.stringify(payload));
+    const txs: TransferTx[] = payload?.transactions
+      ?? (Array.isArray(payload) ? payload : [payload]);
+    cacheIncoming(txs);
+  });
+
+  // Also listen for the full method name in case the shorthand isn't emitted
+  yellow.on('transfer_notification', (payload: any) => {
+    console.log('[service] GOT transfer_notification EVENT:', JSON.stringify(payload));
     const txs: TransferTx[] = payload?.transactions
       ?? (Array.isArray(payload) ? payload : [payload]);
     cacheIncoming(txs);

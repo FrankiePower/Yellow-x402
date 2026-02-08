@@ -155,12 +155,13 @@ export function useChannel() {
       console.log("[useChannel] Waiting 5s for node to index channel...");
       await new Promise(r => setTimeout(r, 5000));
 
-      // Step 4: Fund the channel (moves funds from Unified Balance to on-chain channel)
-      const resizeTxHash = await fundChannel(channelResp.channel_id);
+      // Step 4: Fund the channel (COMMENTED OUT - causing stale channel issues)
+      // const resizeTxHash = await fundChannel(channelResp.channel_id);
 
-      console.log("[useChannel] Channel created and funded!");
+      console.log("[useChannel] Channel created! (skipping resize to avoid stale state)");
+      setState(prev => ({ ...prev, status: "open" }));
 
-      return { channelId: channelResp.channel_id, createTxHash, resizeTxHash };
+      return { channelId: channelResp.channel_id, createTxHash, resizeTxHash: null };
     } catch (err: any) {
       console.error("[useChannel] Create error:", err);
 
