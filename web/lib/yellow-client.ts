@@ -28,6 +28,7 @@ import {
   createGetConfigMessage,
   createResizeChannelMessage,
   createGetLedgerBalancesMessage,
+  createGetChannelsMessage,
 } from '@erc7824/nitrolite';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import type { Address, WalletClient } from 'viem';
@@ -260,6 +261,27 @@ export class YellowClient extends EventEmitter {
     return this.waitFor('ledger_balances');
   }
 
+  /**
+   * Get all channels involving this user.
+   * Useful for finding existing open channels and checking their balance.
+   */
+  async getChannels(status?: 'open' | 'closed'): Promise<{
+    channels: Array<any>; // Using any for simplicity as ChannelInfo structure varies
+  }> {
+    if (!this._authenticated)
+      throw new Error('[YellowClient] not authenticated');
+    
+    // Status 2 = ACTIVE/OPEN in Nitrolite enum (roughly)
+    // Passing undefined fetches all
+    const msg = await createGetChannelsMessage(
+      this.sessionSigner,
+      this.address,
+      undefined // status
+    );
+    this.ws.send(msg);
+    return this.waitFor('get_channels');
+  }
+
   close() {
     this.ws?.close();
   }
@@ -273,7 +295,7 @@ export class YellowClient extends EventEmitter {
       return;
     }
 
-    if (this.debug) console.log('[YellowClient][raw]', raw);
+    if (this.debug || true) console.log('[YellowClient][raw]', raw);
 
     // Top-level error envelope  { error: { code, message } }
     if (msg.error) {

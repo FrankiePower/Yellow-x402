@@ -22,10 +22,11 @@ import 'dotenv/config';
 import express, { Request, Response }  from 'express';
 import cors                            from 'cors';
 import { YellowClient, TransferTx }    from '../lib/yellow-client.js';
+import { runDemo }                     from '../demo-runner.js';
 
 // ── config ─────────────────────────────────────────────────
 const PORT       = Number(process.env.SERVICE_PORT || 4000);
-const PRICE      = process.env.PRICE              || '1000000';
+const PRICE      = process.env.PRICE              || '10000'; // 0.01 USDC
 const ASSET      = 'ytest.usd';
 const PRIV_KEY   = process.env.SERVICE_PRIVATE_KEY as `0x${string}`;
 
@@ -110,10 +111,14 @@ async function requirePayment(
   // after the buyer received its transfer receipt.  Poll briefly.
   let tx = confirmed.get(transactionId);
   if (!tx) {
-    for (let i = 0; i < 30; i++) {                     // up to 3 s
+    console.log(`[service] tx ${transactionId} not found immediately, polling...`);
+    for (let i = 0; i < 100; i++) {                     // up to 10 s (100 * 100ms)
       await new Promise(r => setTimeout(r, 100));
       tx = confirmed.get(transactionId);
-      if (tx) break;
+      if (tx) {
+        console.log(`[service] tx ${transactionId} found after ${i * 100}ms`);
+        break;
+      }
     }
   }
 
@@ -168,7 +173,7 @@ app.get('/resource', async (req, res) => {
 
 app.get('/data', async (req, res) => {
   const tx = await requirePayment(req, res, {
-    price       : '500000',
+    price       : '5000', // 0.005 USDC
     description : 'Access to analytics data',
   });
   if (!tx) return;
@@ -185,7 +190,7 @@ app.get('/data', async (req, res) => {
 
 app.get('/quote', async (req, res) => {
   const tx = await requirePayment(req, res, {
-    price       : '200000',
+    price       : '2000', // 0.002 USDC
     description : 'Live market quote',
   });
   if (!tx) return;
@@ -198,6 +203,29 @@ app.get('/quote', async (req, res) => {
     asset         : tx.asset,
     timestamp     : new Date().toISOString(),
   });
+});
+
+// ── demo runner ────────────────────────────────────────────
+app.get('/run-demo', async (req, res) => {
+  const buyerPrivateKey = process.env.BUYER_PRIVATE_KEY;
+  
+  if (!buyerPrivateKey) {
+    return res.status(500).json({
+      success: false,
+      error: 'BUYER_PRIVATE_KEY not configured on server',
+    });
+  }
+
+  try {
+    const result = await runDemo(buyerPrivateKey);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      logs: [],
+    });
+  }
 });
 
 // ── startup ────────────────────────────────────────────────

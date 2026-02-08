@@ -73,4 +73,22 @@ export class YellowService {
 
     return responseData;
   }
+
+  /**
+   * Run the full demo (executes buyer script on server)
+   */
+  static async runDemo(): Promise<any> {
+    const url = `${SERVICE_URL}/run-demo`;
+    const response = await fetch(url, { method: "GET" });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        responseData.error || `Demo failed with status ${response.status}`
+      );
+    }
+
+    return responseData;
+  }
 }

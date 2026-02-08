@@ -187,6 +187,10 @@ async function main() {
   await yellow.connect();
   console.log(`[buyer]   address=${yellow.address}`);
 
+  const { balances } = await yellow.getLedgerBalances();
+  console.log('[buyer]   Unified Balances:', JSON.stringify(balances));
+
+  /*
   // ② create channel (session open) ─────────────────────
   // If a channel is already open (e.g. from a previous run that created on-chain
   // but didn't close), ClearNode returns "already exists: 0x…".  In that case
@@ -214,23 +218,158 @@ async function main() {
     }
   }
 
-  // ③ paid requests (off-chain, instant) ────────────────
+  // Join settleChannel logic here or verify it earlier.
+  
+  // ── ⑤a  on-chain create (moved up) ────────────────────
+  if (!alreadyOnChain && channelResp && channelId) {
+      console.log('\n[buyer] ⑤a on-chain creation (required for resize) ...');
+      const account       = privateKeyToAccount(PRIV_KEY);
+      const publicClient  = createPublicClient({ chain: sepolia, transport: http() });
+      const walletClient  = createWalletClient({ chain: sepolia, transport: http(), account });
+
+      const nitrolite = new NitroliteClient({
+        publicClient,
+        walletClient,
+        stateSigner       : new WalletStateSigner(walletClient),
+        addresses         : {
+          custody     : CUSTODY_ADDRESS    as `0x${string}`,
+          adjudicator : ADJUDICATOR_ADDRESS as `0x${string}`,
+        },
+        chainId           : sepolia.id,
+        challengeDuration : 3600n,
+      });
+
+      const { txHash: createHash } = await nitrolite.createChannel({
+          channel            : channelResp.channel as any,
+          unsignedInitialState : {
+            intent      : channelResp.state.intent,
+            version     : BigInt(channelResp.state.version),
+            data        : channelResp.state.state_data as `0x${string}`,
+            allocations : channelResp.state.allocations.map(a => ({
+              destination : a.destination as `0x${string}`,
+              token       : a.token       as `0x${string}`,
+              amount      : BigInt(a.amount),
+            })),
+          },
+          serverSignature : channelResp.server_signature as `0x${string}`,
+      });
+      console.log(`[buyer]   ⑤a on-chain create  txHash=${createHash}`);
+      await publicClient.waitForTransactionReceipt({ hash: createHash });
+      console.log(`[buyer]   ⑤a create confirmed`);
+
+      // wait for ClearNode to index
+      console.log(`[buyer]   waiting 5 s for ClearNode to index channel ...`);
+      await new Promise(r => setTimeout(r, 5000));
+      alreadyOnChain = true;
+  }
+
+  // ③ funding (resize) ──────────────────────────────────
+  // Check if channel needs funding
+  let needsFunding = false;
+  let currentAllocations: any[] = [];
+
+  if (channelResp) {
+    currentAllocations = channelResp.state.allocations;
+  } else if (channelId) {
+    // If we reused an existing channel, we need to fetch its state
+    console.log(`[buyer]   fetching state for existing channel ${channelId} ...`);
+    try {
+      const { channels } = await yellow.getChannels();
+      const ch = channels.find((c: any) => c.channel_id === channelId);
+      if (ch) {
+        currentAllocations = ch.state.allocations;
+        // mock a channelResp object so we can use it for settlement later if needed
+        channelResp = ch; 
+      }
+    } catch (e) {
+      console.error('[buyer]   failed to fetch channel state:', e);
+    }
+  }
+
+  const myAlloc = currentAllocations.find((a: any) => a.destination.toLowerCase() === yellow.address.toLowerCase());
+  const balance = BigInt(myAlloc?.amount || '0');
+  console.log(`[buyer]   current balance: ${balance}`);
+
+  if (balance < 1000000n) { // Less than 1 USDC
+    console.log('[buyer]   balance low, resizing (funding) ...');
+    try {
+      const resizeResp = await yellow.resizeChannel({
+        channel_id: channelId!,
+        allocate_amount: 10000000n, // Fund 10 USDC
+      });
+      console.log('[buyer]   resize valid! new allocations:', JSON.stringify(resizeResp.state.allocations));
+      
+      // Submit resize to blockchain (optional but good practice)
+      // For now we just use the off-chain state for payments
+      
+      // Update state for settlement
+      if (channelResp) {
+        channelResp.state = resizeResp.state;
+        channelResp.server_signature = resizeResp.server_signature;
+      }
+    } catch (e: any) {
+      console.error('[buyer]   resize failed:', e.message);
+      // proceed anyway, maybe we have just enough?
+    }
+  }
+  */
+
+  // ④ paid requests (off-chain, instant) ────────────────
   console.log('\n[buyer] ③ making paid requests …');
   for (const path of ENDPOINTS) {
     await doPaidRequest(yellow, path);
   }
 
-  // ④⑤ on-chain settlement ─────────────────────────────
-  // Sequence:
-  //   new channel  → on-chain create → wait → close RPC → on-chain close
-  //   existing     → close RPC → on-chain close            (create already done)
+  /*
+  // ④⑤ on-chain settlement (Clean up) ─────────────────────────────
+  // We already did create (Step 5a), so we only need Close logic
+  console.log(`[buyer] ④ close_channel RPC …`);
   try {
-    await settleChannel(yellow, channelResp, channelId!, alreadyOnChain);
-  } catch (e: any) {
-    console.log(`\n[buyer]   settlement error: ${e.message}`);
-    console.log(`[buyer]   (signed create state from ② can be submitted manually)`);
+      const closeResp = await yellow.closeChannel(channelId!, yellow.address);
+      console.log(`[buyer]   channel_id=${closeResp.channel_id}`);
+      console.log(`[buyer]   final allocations:`, JSON.stringify(closeResp.state.allocations));
+
+      console.log(`[buyer] ⑤ on-chain close …`);
+      const account       = privateKeyToAccount(PRIV_KEY);
+      const publicClient  = createPublicClient({ chain: sepolia, transport: http() });
+      const walletClient  = createWalletClient({ chain: sepolia, transport: http(), account });
+      
+      const nitrolite = new NitroliteClient({
+        publicClient,
+        walletClient,
+        stateSigner       : new WalletStateSigner(walletClient),
+        addresses         : {
+          custody     : CUSTODY_ADDRESS    as `0x${string}`,
+          adjudicator : ADJUDICATOR_ADDRESS as `0x${string}`,
+        },
+        chainId           : sepolia.id,
+        challengeDuration : 3600n,
+      });
+
+      const closeHash = await nitrolite.closeChannel({
+        finalState : {
+          intent      : closeResp.state.intent,
+          version     : BigInt(closeResp.state.version),
+          data        : (closeResp.state.state_data || '0x') as `0x${string}`,
+          allocations : closeResp.state.allocations.map(a => ({
+            destination : a.destination as `0x${string}`,
+            token       : a.token       as `0x${string}`,
+            amount      : BigInt(a.amount),
+          })),
+          channelId       : closeResp.channel_id as `0x${string}`,
+          serverSignature : closeResp.server_signature as `0x${string}`,
+        },
+        stateData : (closeResp.state.state_data || '0x') as `0x${string}`,
+      });
+      console.log(`[buyer]   ⑤b on-chain close   txHash=${closeHash}`);
+      await publicClient.waitForTransactionReceipt({ hash: closeHash });
+      console.log(`[buyer]   ⑤b close confirmed — settlement complete`);
+  } catch(e: any) {
+      console.error("[buyer] Close failed:", e.message);
   }
 
+  yellow.close();
+  */
   yellow.close();
 }
 

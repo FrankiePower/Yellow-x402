@@ -1,27 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { useYellowPayment } from "@/hooks/useYellowPayment";
+import { YellowService } from "@/services/yellow.service";
 import { useYellow } from "@/hooks/useYellow";
 
-const ENDPOINTS = [
-  { path: "/resource", name: "Premium Resource", price: "1.00 ytest.usd" },
-  { path: "/data", name: "Analytics Data", price: "0.50 ytest.usd" },
-  { path: "/quote", name: "Market Quote", price: "0.20 ytest.usd" },
-];
+interface DemoLogEntry {
+  timestamp: string;
+  level: 'info' | 'error' | 'success';
+  message: string;
+  data?: any;
+}
 
 export default function YellowDemo() {
   const { isAuthenticated, yellowClient } = useYellow();
-  const { loading, error, response, status, callEndpoint, reset } = useYellowPayment();
-  const [selectedEndpoint, setSelectedEndpoint] = useState(ENDPOINTS[0]);
+  const [loading, setLoading] = useState(false);
+  const [logs, setLogs] = useState<DemoLogEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCallEndpoint = async () => {
+  const handleRunDemo = async () => {
+    setLoading(true);
+    setError(null);
+    setLogs([]);
+
     try {
-      await callEndpoint(selectedEndpoint.path);
-    } catch (err) {
-      // Error is already handled in the hook
-      console.error("Payment failed:", err);
+      const result = await YellowService.runDemo();
+      
+      if (result.success) {
+        setLogs(result.logs);
+      } else {
+        setError(result.error || "Demo failed");
+        setLogs(result.logs || []);
+      }
+    } catch (err: any) {
+      setError(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const reset = () => {
+    setLogs([]);
+    setError(null);
   };
 
   if (!isAuthenticated) {
@@ -43,62 +62,28 @@ export default function YellowDemo() {
       </h3>
 
       <div className="bg-white/5 border border-white/10 p-6 space-y-6">
-        {/* Endpoint Selection */}
-        <div className="space-y-2">
-          <label className="text-xs font-mono text-white/60 uppercase tracking-wider">
-            Select Endpoint
-          </label>
-          <div className="grid grid-cols-1 gap-2">
-            {ENDPOINTS.map((endpoint) => (
-              <button
-                key={endpoint.path}
-                onClick={() => setSelectedEndpoint(endpoint)}
-                disabled={loading}
-                className={`px-4 py-3 text-left border transition-all ${
-                  selectedEndpoint.path === endpoint.path
-                    ? "border-[#FCD535] bg-[#FCD535]/10"
-                    : "border-white/20 hover:border-white/40"
-                } disabled:opacity-50`}
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-mono text-white">{endpoint.name}</span>
-                  <span className="text-xs font-mono text-white/60">{endpoint.price}</span>
-                </div>
-                <div className="text-xs font-mono text-white/40 mt-1">{endpoint.path}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Call Button */}
+        {/* Run Demo Button */}
         <button
-          onClick={handleCallEndpoint}
+          onClick={handleRunDemo}
           disabled={loading}
           className="w-full px-6 py-3 bg-[#FCD535] text-black font-bold text-sm uppercase tracking-wider hover:bg-[#FCD535]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
         >
           {loading ? (
             <>
               <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-              <span>Processing Payment...</span>
+              <span>Running Demo...</span>
             </>
           ) : (
-            <span>Call Endpoint & Pay</span>
+            <span>Run Full Demo (3 Payments)</span>
           )}
         </button>
 
-        {/* Status */}
-        {status !== "// Waiting..." && (
-          <div className="bg-black border border-white/10 p-4">
-            <div className="text-xs font-mono text-white/60">{status}</div>
-          </div>
-        )}
-
-        {/* Response */}
-        {response && (
+        {/* Logs */}
+        {logs.length > 0 && (
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <label className="text-xs font-mono text-white/60 uppercase tracking-wider">
-                Response
+                Demo Logs
               </label>
               <button
                 onClick={reset}
@@ -107,10 +92,27 @@ export default function YellowDemo() {
                 Clear
               </button>
             </div>
-            <div className="bg-black border border-white/10 p-4 overflow-auto max-h-96">
-              <pre className="text-xs font-mono text-white whitespace-pre-wrap">
-                {JSON.stringify(response, null, 2)}
-              </pre>
+            <div className="bg-black border border-white/10 p-4 overflow-auto max-h-96 space-y-1">
+              {logs.map((log, idx) => (
+                <div key={idx} className="text-xs font-mono">
+                  <span className="text-white/40">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  {' '}
+                  <span className={
+                    log.level === 'success' ? 'text-green-400' :
+                    log.level === 'error' ? 'text-red-400' :
+                    'text-white/60'
+                  }>
+                    [{log.level.toUpperCase()}]
+                  </span>
+                  {' '}
+                  <span className="text-white">{log.message}</span>
+                  {log.data && (
+                    <pre className="text-white/40 ml-4 mt-1">
+                      {JSON.stringify(log.data, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -124,8 +126,8 @@ export default function YellowDemo() {
 
         {/* Info */}
         <div className="text-xs font-mono text-white/40 space-y-1">
-          <p>💡 Each call requires an instant off-chain payment via Yellow Network</p>
-          <p>⚡ Payments settle in milliseconds with zero gas fees</p>
+          <p>💡 Demo executes 3 paid API calls with instant off-chain payments</p>
+          <p>⚡ All payments settle in milliseconds with zero gas fees</p>
           {yellowClient && (
             <p>🔑 Your Yellow address: {yellowClient.address}</p>
           )}

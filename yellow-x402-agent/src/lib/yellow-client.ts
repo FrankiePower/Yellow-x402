@@ -26,6 +26,9 @@ import {
   createCreateChannelMessage,
   createCloseChannelMessage,
   createGetConfigMessage,
+  createResizeChannelMessage,
+  createGetChannelsMessage,
+  createGetLedgerBalancesMessage,
 } from '@erc7824/nitrolite';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { createWalletClient, http }                from 'viem';
@@ -186,14 +189,78 @@ export class YellowClient extends EventEmitter {
     return this.waitFor('assets');   // first response; "get_config" follows but has no asset list
   }
 
+  /**
+   * Resize (fund) a state channel by moving funds from Unified Balance.
+   * Uses allocate_amount to pull from off-chain ledger balance (from faucet).
+   */
+  async resizeChannel(params: {
+    channel_id: string;
+    allocate_amount: bigint;
+  }): Promise<{
+    channel_id: string;
+    state: ChannelInfo['state'];
+    server_signature: string;
+  }> {
+    if (!this._authenticated)
+      throw new Error('[YellowClient] not authenticated');
+    const msg = await createResizeChannelMessage(this.sessionSigner, {
+      channel_id: params.channel_id as `0x${string}`,
+      resize_amount: params.allocate_amount, // Use resize_amount to Fund (Unified -> Channel)
+      funds_destination: this.address,
+    });
+    this.ws.send(msg);
+    return this.waitFor('resize_channel');
+  }
+
+
+  /**
+   * Get ledger balances (off-chain Unified Balance).
+   * This shows funds available from faucet that can be allocated to channels.
+   */
+  async getLedgerBalances(): Promise<{
+    balances: Array<{ asset: string; amount: string }>;
+  }> {
+    if (!this._authenticated)
+      throw new Error('[YellowClient] not authenticated');
+    const msg = await createGetLedgerBalancesMessage(
+      this.sessionSigner,
+      this.address,
+      Date.now()
+    );
+    this.ws.send(msg);
+    const res = await this.waitFor('get_ledger_balances');
+    return { balances: res.ledger_balances };
+  }
+
+  /**
+   * Get all channels involving this user.
+   * Useful for finding existing open channels and checking their balance.
+   */
+  async getChannels(status?: 'open' | 'closed'): Promise<{
+    channels: Array<any>; // Using any for simplicity as ChannelInfo structure varies
+  }> {
+    if (!this._authenticated)
+      throw new Error('[YellowClient] not authenticated');
+    
+    // Status 2 = ACTIVE/OPEN in Nitrolite enum (roughly)
+    // Passing undefined fetches all
+    const msg = await createGetChannelsMessage(
+      this.sessionSigner,
+      this.address,
+      undefined // status
+    );
+    this.ws.send(msg);
+    return this.waitFor('get_channels');
+  }
+
   close() { this.ws?.close(); }
 
   // ── message router ───────────────────────────────────────
   private async onMessage(raw: string): Promise<void> {
+    if (this.debug || true) console.log('[YellowClient][raw]', raw); // Force debug logging
+    
     let msg: any;
     try { msg = JSON.parse(raw); } catch { return; }
-
-    if (this.debug) console.log('[YellowClient][raw]', raw);
 
     // Top-level error envelope  { error: { code, message } }
     if (msg.error) {

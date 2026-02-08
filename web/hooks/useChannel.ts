@@ -35,14 +35,74 @@ export function useChannel() {
   const [isLoading, setIsLoading] = useState(false);
   const tokenAddress = YTEST_USD_TOKEN;
 
+  // Helper to fund (resize) an existing channel
+  const fundChannel = useCallback(async (channelId: string) => {
+    if (!yellowClient || !client || !publicClient) return;
+
+    setState(prev => ({ ...prev, status: "funding", channelId }));
+    console.log("[useChannel] Requesting resize from ClearNode...");
+    console.log("[useChannel] Allocating", FUND_AMOUNT.toString(), "from Unified Balance");
+
+    const resizeResp = await yellowClient.resizeChannel({
+      channel_id: channelId,
+      allocate_amount: FUND_AMOUNT,
+    });
+
+    console.log("[useChannel] Resize response received");
+
+    // Step 5: Get proofStates from on-chain data
+    let proofStates: any[] = [];
+    try {
+      console.log("[useChannel] Getting on-chain channel data for proofStates...");
+      const onChainData = await client.getChannelData(channelId as `0x${string}`);
+      if (onChainData.lastValidState) {
+        proofStates = [onChainData.lastValidState];
+        console.log("[useChannel] Got proofStates from on-chain data");
+      }
+    } catch (e) {
+      console.log("[useChannel] Could not fetch on-chain data (may be new channel):", e);
+    }
+
+    // Step 6: Submit resize to blockchain
+    console.log("[useChannel] Submitting resize to blockchain...");
+    const { txHash: resizeTxHash } = await client.resizeChannel({
+      resizeState: {
+        intent: resizeResp.state.intent,
+        version: BigInt(resizeResp.state.version),
+        data: (resizeResp.state.state_data || "0x") as `0x${string}`,
+        allocations: resizeResp.state.allocations.map((a: any) => ({
+          destination: a.destination as `0x${string}`,
+          token: a.token as `0x${string}`,
+          amount: BigInt(a.amount),
+        })),
+        channelId: resizeResp.channel_id as `0x${string}`,
+        serverSignature: resizeResp.server_signature as `0x${string}`,
+      },
+      proofStates,
+    });
+
+    console.log("[useChannel] Resize tx submitted:", resizeTxHash);
+    setState(prev => ({ ...prev, resizeTxHash }));
+
+    // Wait for resize confirmation
+    console.log("[useChannel] Waiting for resize confirmation...");
+    await publicClient.waitForTransactionReceipt({ hash: resizeTxHash });
+
+    console.log("[useChannel] Channel funded and ready!");
+    setState(prev => ({
+      ...prev,
+      status: "open",
+    }));
+
+    return resizeTxHash;
+  }, [yellowClient, client, publicClient]);
+
   /**
    * Full channel lifecycle matching yellow-app reference:
    * 1. Create channel via ClearNode
    * 2. Submit to blockchain
    * 3. Wait 5s for node to index
-   * 4. Resize (fund) channel with allocate_amount
-   * 5. Get proofStates from getChannelData
-   * 6. Submit resize to blockchain
+   * 4. Call fundChannel (Resize)
    */
   const createChannel = useCallback(async () => {
     if (!yellowClient || !client || !publicClient || !isAuthenticated) {
@@ -95,67 +155,17 @@ export function useChannel() {
       console.log("[useChannel] Waiting 5s for node to index channel...");
       await new Promise(r => setTimeout(r, 5000));
 
-      // Step 4: Request resize from ClearNode
-      console.log("[useChannel] Requesting resize from ClearNode...");
-      console.log("[useChannel] Allocating", FUND_AMOUNT.toString(), "from Unified Balance");
+      // Step 4: Fund the channel
+      // const resizeTxHash = await fundChannel(channelResp.channel_id);
+      
+      console.log("[useChannel] Channel ready (skipping funding - using Unified Balance)!");
+      setState(prev => ({ ...prev, status: "open" }));
 
-      const resizeResp = await yellowClient.resizeChannel({
-        channel_id: channelResp.channel_id,
-        allocate_amount: FUND_AMOUNT,
-      });
-
-      console.log("[useChannel] Resize response received");
-
-      // Step 5: Get proofStates from on-chain data (like reference project)
-      let proofStates: any[] = [];
-      try {
-        console.log("[useChannel] Getting on-chain channel data for proofStates...");
-        const onChainData = await client.getChannelData(channelResp.channel_id as `0x${string}`);
-        if (onChainData.lastValidState) {
-          proofStates = [onChainData.lastValidState];
-          console.log("[useChannel] Got proofStates from on-chain data");
-        }
-      } catch (e) {
-        console.log("[useChannel] Could not fetch on-chain data (may be new channel):", e);
-      }
-
-      // Step 6: Submit resize to blockchain
-      console.log("[useChannel] Submitting resize to blockchain...");
-      const { txHash: resizeTxHash } = await client.resizeChannel({
-        resizeState: {
-          intent: resizeResp.state.intent,
-          version: BigInt(resizeResp.state.version),
-          data: (resizeResp.state.state_data || "0x") as `0x${string}`,
-          allocations: resizeResp.state.allocations.map((a: any) => ({
-            destination: a.destination as `0x${string}`,
-            token: a.token as `0x${string}`,
-            amount: BigInt(a.amount),
-          })),
-          channelId: resizeResp.channel_id as `0x${string}`,
-          serverSignature: resizeResp.server_signature as `0x${string}`,
-        },
-        proofStates,
-      });
-
-      console.log("[useChannel] Resize tx submitted:", resizeTxHash);
-      setState(prev => ({ ...prev, resizeTxHash }));
-
-      // Wait for resize confirmation
-      console.log("[useChannel] Waiting for resize confirmation...");
-      await publicClient.waitForTransactionReceipt({ hash: resizeTxHash });
-
-      console.log("[useChannel] Channel funded and ready!");
-      setState(prev => ({
-        ...prev,
-        status: "open",
-      }));
-
-      return { channelId: channelResp.channel_id, createTxHash, resizeTxHash };
+      return { channelId: channelResp.channel_id, createTxHash, resizeTxHash: null };
     } catch (err: any) {
       console.error("[useChannel] Create error:", err);
 
       // Check if channel already exists
-      // Error might be a stringified JSON like {"error":"an open channel ... 0x..."}
       let errorMsg = err.message;
       if (typeof err === 'object' && err.error) {
           errorMsg = JSON.stringify(err.error);
@@ -163,20 +173,54 @@ export function useChannel() {
       
       const match = errorMsg?.match(/0x[a-fA-F0-9]{64}/);
       if (match && (errorMsg.includes("already exists") || errorMsg.includes("open channel"))) {
-        console.log("[useChannel] Found existing channel:", match[0]);
+        const existingId = match[0];
+        console.log("[useChannel] Found existing channel:", existingId);
+        
+        // Recover: Check if funded
+        try {
+          console.log("[useChannel] Checking funding status via getChannels...");
+          const { channels } = await yellowClient.getChannels();
+          const channelData = channels.find((c: any) => c.channel_id === existingId);
+          
+          if (channelData) {
+            console.log("[useChannel] Found channel data:", channelData);
+            const allocations = channelData.state?.allocations || [];
+            const isFunded = allocations.some((a: any) => BigInt(a.amount) > 0n);
+
+            if (isFunded) {
+              console.log("[useChannel] Channel is already funded. Opening.");
+              setState(prev => ({
+                ...prev,
+                channelId: existingId,
+                status: "open",
+                error: null,
+                channelInfo: channelData
+              }));
+              return { channelId: existingId, createTxHash: null, alreadyExists: true, funded: true };
+            } else {
+               console.log("[useChannel] Channel exists but is unfunded. Attempting to fund...");
+               // If unfunded, try to fund it
+               const resizeTxHash = await fundChannel(existingId);
+               return { channelId: existingId, createTxHash: null, resizeTxHash, alreadyExists: true, funded: true };
+            }
+          }
+        } catch (recoverErr) {
+          console.error("[useChannel] Failed to verify/recover channel:", recoverErr);
+        }
+
+        // Fallback if recovery check failed but we have ID
         setState(prev => ({
           ...prev,
-          channelId: match[0],
+          channelId: existingId,
           status: "open",
           error: null,
           channelInfo: { 
-            channel_id: match[0], 
-            // We don't have the full info, but enough to proceed
+            channel_id: existingId, 
             state: { intent: 0, version: 0, state_data: "0x", allocations: [] }, 
             server_signature: "0x" 
           }
         }));
-        return { channelId: match[0], createTxHash: null, alreadyExists: true };
+        return { channelId: existingId, createTxHash: null, alreadyExists: true };
       }
 
       setState(prev => ({ ...prev, status: "none", error: err.message }));
@@ -184,7 +228,7 @@ export function useChannel() {
     } finally {
       setIsLoading(false);
     }
-  }, [yellowClient, client, publicClient, isAuthenticated, tokenAddress]);
+  }, [yellowClient, client, publicClient, isAuthenticated, tokenAddress, fundChannel]);
 
   /**
    * Close channel and settle on-chain
