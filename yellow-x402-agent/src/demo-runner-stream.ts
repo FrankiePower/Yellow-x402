@@ -215,20 +215,17 @@ export async function runDemoWithStreaming(
 
       if (res.ok) {
         successCount++;
-        
-        if ((i + 1) % 10 === 0) {
-          onLog({
-            timestamp: new Date().toISOString(),
-            level: 'success',
-            message: `✅ ${i + 1}/${totalPayments} payments completed`,
-          });
-        }
+        onLog({
+          timestamp: new Date().toISOString(),
+          level: 'success',
+          message: `✅ Payment ${i + 1}/${totalPayments} - TX ${tx.id} (${endpoint})`,
+        });
       } else {
         failCount++;
         onLog({
           timestamp: new Date().toISOString(),
           level: 'error',
-          message: `Payment ${i + 1} failed: ${res.status}`,
+          message: `❌ Payment ${i + 1} failed: ${res.status}`,
         });
       }
     } catch (error: any) {

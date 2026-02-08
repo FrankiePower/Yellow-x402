@@ -230,31 +230,45 @@ app.get('/run-demo', async (req, res) => {
 
 // ── /run-demo-stream (SSE real-time streaming) ──────────────────
 app.get('/run-demo-stream', async (req, res) => {
+  // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
-  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+  // Flush headers immediately to establish SSE connection
+  res.flushHeaders();
+
+  // Helper to write and flush
+  const send = (data: object) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    // Force flush by writing empty string (Node.js trick)
+    if (typeof (res as any).flush === 'function') {
+      (res as any).flush();
+    }
+  };
+
+  send({ type: 'connected' });
 
   const buyerPrivateKey = process.env.BUYER_PRIVATE_KEY;
   if (!buyerPrivateKey) {
-    res.write(`data: ${JSON.stringify({ type: 'error', error: 'BUYER_PRIVATE_KEY not configured' })}\n\n`);
+    send({ type: 'error', error: 'BUYER_PRIVATE_KEY not configured' });
     res.end();
     return;
   }
 
   try {
     const { runDemoWithStreaming } = await import('../demo-runner-stream.js');
-    
+
     await runDemoWithStreaming(buyerPrivateKey, (log) => {
-      res.write(`data: ${JSON.stringify({ type: 'log', log })}\n\n`);
+      send({ type: 'log', log });
     });
 
-    res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+    send({ type: 'complete' });
     res.end();
   } catch (error: any) {
-    res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+    send({ type: 'error', error: error.message });
     res.end();
   }
 });
