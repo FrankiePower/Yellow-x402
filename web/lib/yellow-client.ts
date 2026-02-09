@@ -98,6 +98,7 @@ export class YellowClient extends EventEmitter {
   private authPartial!: Record<string, unknown>; // persisted for challenge signing
   private _authenticated = false;
   private readonly debug: boolean;
+  private _isReconnecting = false;
 
   // ── ctor ─────────────────────────────────────────────────
   constructor(
@@ -123,6 +124,9 @@ export class YellowClient extends EventEmitter {
   get isAuth(): boolean {
     return this._authenticated;
   }
+  get isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
 
   /** Open WebSocket and complete EIP-712 auth handshake. */
   async connect(): Promise<void> {
@@ -134,13 +138,48 @@ export class YellowClient extends EventEmitter {
     await this.doAuth();
   }
 
+  /** Reconnect if WebSocket is closed. Returns true if reconnection was needed. */
+  async ensureConnected(): Promise<boolean> {
+    if (this.isConnected && this._authenticated) {
+      return false; // Already connected
+    }
+
+    if (this._isReconnecting) {
+      // Wait for ongoing reconnection to complete
+      await this.waitFor('authenticated', 30_000);
+      return true;
+    }
+
+    console.log('[YellowClient] WebSocket closed, reconnecting...');
+    this._isReconnecting = true;
+    this._authenticated = false;
+
+    try {
+      // Close old WebSocket if exists
+      if (this.ws) {
+        try { this.ws.close(); } catch { /* ignore */ }
+      }
+
+      // Reconnect
+      this.ws = new WebSocket(this.opts.clearnetUrl || CLEARNET_DEFAULT);
+      await this.awaitOpen();
+      this.ws.addEventListener('message', (event) =>
+        this.onMessage(event.data.toString())
+      );
+      await this.doAuth();
+      console.log('[YellowClient] Reconnected successfully');
+      return true;
+    } finally {
+      this._isReconnecting = false;
+    }
+  }
+
   /**
    * Send funds via the ClearNode ledger.
    * Returns the transaction receipt(s) from ClearNode.
    */
   async transfer(params: TransferParams): Promise<TransferTx[]> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
+    await this.ensureConnected();
 
     const rpc: Record<string, unknown> = {
       allocations: [{ asset: params.asset, amount: params.amount }],
@@ -167,8 +206,7 @@ export class YellowClient extends EventEmitter {
     chain_id: number;
     token: string;
   }): Promise<ChannelInfo> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
+    await this.ensureConnected();
     const msg = await createCreateChannelMessage(this.sessionSigner, {
       chain_id: params.chain_id,
       token: params.token as Address,
@@ -186,8 +224,7 @@ export class YellowClient extends EventEmitter {
     channelId: string,
     fundDestination: Address
   ): Promise<ChannelInfo> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
+    await this.ensureConnected();
     const msg = await createCloseChannelMessage(
       this.sessionSigner,
       channelId as `0x${string}`,
@@ -213,8 +250,7 @@ export class YellowClient extends EventEmitter {
     }>;
     [k: string]: any;
   }> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
+    await this.ensureConnected();
     const msg = await createGetConfigMessage(this.sessionSigner);
     this.ws.send(msg);
     return this.waitFor('assets'); // first response; "get_config" follows but has no asset list
@@ -232,8 +268,7 @@ export class YellowClient extends EventEmitter {
     state: ChannelInfo['state'];
     server_signature: string;
   }> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
+    await this.ensureConnected();
     const msg = await createResizeChannelMessage(this.sessionSigner, {
       channel_id: params.channel_id as `0x${string}`,
       allocate_amount: params.allocate_amount,
@@ -250,8 +285,7 @@ export class YellowClient extends EventEmitter {
   async getLedgerBalances(): Promise<{
     balances: Array<{ asset: string; amount: string }>;
   }> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
+    await this.ensureConnected();
     const msg = await createGetLedgerBalancesMessage(
       this.sessionSigner,
       this.address,
@@ -268,9 +302,8 @@ export class YellowClient extends EventEmitter {
   async getChannels(status?: 'open' | 'closed'): Promise<{
     channels: Array<any>; // Using any for simplicity as ChannelInfo structure varies
   }> {
-    if (!this._authenticated)
-      throw new Error('[YellowClient] not authenticated');
-    
+    await this.ensureConnected();
+
     // Status 2 = ACTIVE/OPEN in Nitrolite enum (roughly)
     // Passing undefined fetches all
     const msg = await createGetChannelsMessage(

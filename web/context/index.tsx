@@ -24,6 +24,8 @@ export const YellowNetworkContext = createContext<YellowNetworkContextType | nul
 
 const CUSTODY_ADDRESS = "0x019B65A265EB3363822f2752141b3dF16131b262";
 const ADJUDICATOR_ADDRESS = "0x7c7ccbc98469190849BCC6c926307794fDfB11F2";
+// Use a reliable public RPC - can be overridden via NEXT_PUBLIC_SEPOLIA_RPC env var
+const SEPOLIA_RPC = process.env.NEXT_PUBLIC_SEPOLIA_RPC || "https://ethereum-sepolia.publicnode.com";
 
 export default function YellowNetworkProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
@@ -86,10 +88,10 @@ export default function YellowNetworkProvider({ children }: { children: ReactNod
 
       setWalletClient(_walletClient);
 
-      // Setup Public Client
+      // Setup Public Client with explicit RPC URL
       const _publicClient = createPublicClient({
         chain: sepolia,
-        transport: http(),
+        transport: http(SEPOLIA_RPC),
       });
       setPublicClient(_publicClient);
 

@@ -19,8 +19,10 @@ export default function ChannelManagement() {
     closeTxHash,
     error,
     isLoading,
+    isCheckingExisting,
     createChannel,
     closeChannel,
+    checkExistingChannels,
     reset,
   } = useChannel();
 
@@ -115,10 +117,31 @@ export default function ChannelManagement() {
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono text-white/60 uppercase">Channel Status</span>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
-            <span className="text-sm font-mono text-white capitalize">{getStatusLabel()}</span>
+            {isCheckingExisting ? (
+              <>
+                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                <span className="text-sm font-mono text-white">Checking...</span>
+              </>
+            ) : (
+              <>
+                <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+                <span className="text-sm font-mono text-white capitalize">{getStatusLabel()}</span>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Existing Channel Found Banner */}
+        {status === "open" && !createTxHash && channelId && (
+          <div className="bg-green-500/10 border border-green-500/50 p-3">
+            <div className="text-xs font-mono text-green-400">
+              ✓ Existing funded channel detected
+            </div>
+            <div className="text-xs font-mono text-white/60 mt-1">
+              Ready for payments - skip to Close & Settle when done
+            </div>
+          </div>
+        )}
 
         {/* Channel ID */}
         {channelId && (
@@ -229,13 +252,23 @@ export default function ChannelManagement() {
           </div>
         )}
 
-        {/* Reset Button */}
+        {/* Reset / Refresh Buttons */}
         {status === "closed" && (
           <button
             onClick={reset}
             className="w-full px-4 py-2 bg-white/10 text-white/60 font-mono text-xs uppercase tracking-wider hover:bg-white/20 transition-all"
           >
             Start New Session
+          </button>
+        )}
+
+        {status === "none" && !isCheckingExisting && (
+          <button
+            onClick={checkExistingChannels}
+            disabled={isCheckingExisting}
+            className="w-full px-4 py-2 bg-white/10 text-white/60 font-mono text-xs uppercase tracking-wider hover:bg-white/20 transition-all"
+          >
+            🔄 Check for Existing Channels
           </button>
         )}
 

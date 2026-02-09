@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useYellow } from "@/hooks/useYellow";
 import type { ChannelInfo } from "@/lib/yellow-client";
 
@@ -33,7 +33,62 @@ export function useChannel() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingExisting, setIsCheckingExisting] = useState(false);
   const tokenAddress = YTEST_USD_TOKEN;
+
+  /**
+   * Check for existing open channels when user connects.
+   * Automatically populates state if a funded channel is found.
+   */
+  const checkExistingChannels = useCallback(async () => {
+    if (!yellowClient || !isAuthenticated) return null;
+
+    setIsCheckingExisting(true);
+    try {
+      console.log("[useChannel] Checking for existing channels...");
+      const { channels } = await yellowClient.getChannels();
+      console.log("[useChannel] Found", channels.length, "channel(s)");
+
+      // Find a funded channel
+      for (const ch of channels) {
+        const allocations = ch.state?.allocations || [];
+        const isFunded = allocations.some((a: any) => BigInt(a.amount) > 0n);
+
+        if (isFunded) {
+          console.log("[useChannel] Found existing funded channel:", ch.channel_id);
+          setState(prev => ({
+            ...prev,
+            channelId: ch.channel_id,
+            status: "open",
+            channelInfo: ch,
+            error: null,
+          }));
+          return ch;
+        }
+      }
+
+      // Check for unfunded channels too (created but not yet funded)
+      for (const ch of channels) {
+        console.log("[useChannel] Found existing unfunded channel:", ch.channel_id);
+        setState(prev => ({
+          ...prev,
+          channelId: ch.channel_id,
+          status: "none", // Needs funding
+          channelInfo: ch,
+          error: "Channel exists but needs funding",
+        }));
+        return ch;
+      }
+
+      console.log("[useChannel] No existing channels found");
+      return null;
+    } catch (err: any) {
+      console.error("[useChannel] Error checking channels:", err);
+      return null;
+    } finally {
+      setIsCheckingExisting(false);
+    }
+  }, [yellowClient, isAuthenticated]);
 
   // Helper to fund (resize) an existing channel
   const fundChannel = useCallback(async (channelId: string) => {
@@ -155,13 +210,12 @@ export function useChannel() {
       console.log("[useChannel] Waiting 5s for node to index channel...");
       await new Promise(r => setTimeout(r, 5000));
 
-      // Step 4: Fund the channel (COMMENTED OUT - causing stale channel issues)
-      // const resizeTxHash = await fundChannel(channelResp.channel_id);
+      // Step 4: Fund the channel from Unified Balance
+      const resizeTxHash = await fundChannel(channelResp.channel_id);
 
-      console.log("[useChannel] Channel created! (skipping resize to avoid stale state)");
-      setState(prev => ({ ...prev, status: "open" }));
+      console.log("[useChannel] Channel created and funded!");
 
-      return { channelId: channelResp.channel_id, createTxHash, resizeTxHash: null };
+      return { channelId: channelResp.channel_id, createTxHash, resizeTxHash };
     } catch (err: any) {
       console.error("[useChannel] Create error:", err);
 
@@ -301,12 +355,21 @@ export function useChannel() {
     });
   }, []);
 
+  // Auto-check for existing channels when user authenticates
+  useEffect(() => {
+    if (isAuthenticated && yellowClient && state.status === "none" && !state.channelId) {
+      checkExistingChannels();
+    }
+  }, [isAuthenticated, yellowClient, state.status, state.channelId, checkExistingChannels]);
+
   return {
     ...state,
     isLoading,
+    isCheckingExisting,
     tokenAddress,
     createChannel,
     closeChannel,
+    checkExistingChannels,
     reset,
   };
 }
