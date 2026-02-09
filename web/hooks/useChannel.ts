@@ -50,12 +50,14 @@ export function useChannel() {
       console.log("[useChannel] Found", channels.length, "channel(s)");
 
       // Find a funded channel
+      // Find a funded channel
       for (const ch of channels) {
-        const allocations = ch.state?.allocations || [];
-        const isFunded = allocations.some((a: any) => BigInt(a.amount) > 0n);
+        // Fix: Use 'amount' from summary instead of digging into state.allocations
+        // The API returns "amount": "20" for funded channels
+        const isFunded = ch.amount && BigInt(ch.amount) > 0n;
 
         if (isFunded) {
-          console.log("[useChannel] Found existing funded channel:", ch.channel_id);
+          console.log("[useChannel] Found existing funded channel:", ch.channel_id, "Amount:", ch.amount);
           setState(prev => ({
             ...prev,
             channelId: ch.channel_id,
@@ -238,11 +240,12 @@ export function useChannel() {
           
           if (channelData) {
             console.log("[useChannel] Found channel data:", channelData);
-            const allocations = channelData.state?.allocations || [];
-            const isFunded = allocations.some((a: any) => BigInt(a.amount) > 0n);
+            
+            // Fix: Use 'amount' from summary
+            const isFunded = channelData.amount && BigInt(channelData.amount) > 0n;
 
             if (isFunded) {
-              console.log("[useChannel] Channel is already funded. Opening.");
+              console.log("[useChannel] Channel is already funded. Opening. Amount:", channelData.amount);
               setState(prev => ({
                 ...prev,
                 channelId: existingId,
